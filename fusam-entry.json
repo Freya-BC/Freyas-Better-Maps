@@ -1,0 +1,20 @@
+{
+	"id": "FBM",
+	"name": "Freyas Better Maps",
+	"description": "Bondage Club map helpers: typing bubbles, build tools, templates, map library, hearing-range whisper, SuperZoom.",
+	"author": "FreyaCoding",
+	"repository": "",
+	"website": "",
+	"tags": ["enhancements", "maps"],
+	"type": "script",
+	"versions": [
+		{
+			"distribution": "stable",
+			"source": ""
+		},
+		{
+			"distribution": "dev",
+			"source": ""
+		}
+	]
+}
