@@ -31,6 +31,24 @@ FBM.buildBarShouldShow = function () {
 	return true;
 };
 
+/** True when the open bar is still allowed on the current map/room (ignores _buildBarOpen). */
+FBM.buildBarStillOnMap = function () {
+	const m = FBM.mapBag();
+	if (!m.buildingTools) return false;
+	if (typeof ChatRoomMapViewIsActive === "function" && !ChatRoomMapViewIsActive()) return false;
+	if (!FBM.mapIsMapRoom()) return false;
+	if (!FBM.mapIsAdmin()) return false;
+	return true;
+};
+
+/** Close the bar when leaving the map/room (keeps state in sync with the DOM). */
+FBM.closeBuildBarIfOffMap = function () {
+	if (!FBM._buildBarOpen) return false;
+	if (FBM.buildBarStillOnMap()) return false;
+	FBM.setBuildBarOpen(false);
+	return true;
+};
+
 FBM.getMainCanvasEl = function () {
 	if (typeof MainCanvas !== "undefined" && MainCanvas && MainCanvas.canvas) return MainCanvas.canvas;
 	return document.getElementById("MainCanvas");
@@ -161,6 +179,13 @@ FBM.refreshBuildBar = function () {
 	FBM.ensureUi();
 	const bar = $("fbm-build-bar");
 	if (!bar) return;
+	/* Leaving map/room while open — clear open state (not only hide CSS). */
+	if (FBM._buildBarOpen && !FBM.buildBarStillOnMap()) {
+		FBM._buildBarOpen = false;
+		FBM._buildBarPos = null;
+		FBM._buildBarDragging = false;
+		if (FBM.hideTemplatesUi) FBM.hideTemplatesUi();
+	}
 	const show = FBM.buildBarShouldShow();
 	bar.classList.toggle("fbm-show", show);
 	if (!show) {
@@ -201,7 +226,11 @@ FBM.refreshBuildBar = function () {
 		if (!FBM._buildBarRaf) {
 			const tick = function () {
 				FBM._buildBarRaf = 0;
-				if (!FBM.buildBarShouldShow()) return;
+				if (!FBM.buildBarShouldShow()) {
+					/* Map DrawUi stopped (left map/room) — sync hide + close state. */
+					if (FBM.refreshBuildBar) FBM.refreshBuildBar();
+					return;
+				}
 				if (!FBM._buildBarDragging) FBM.layoutBuildBar();
 				FBM._buildBarRaf = requestAnimationFrame(tick);
 			};

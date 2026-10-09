@@ -1,7 +1,7 @@
 /** Freyas Better Maps — defaults.js */
 import { FBM } from "./fbm";
 
-FBM.VERSION = "0.1.35";
+FBM.VERSION = "0.1.36";
 FBM.FULL_NAME = "Freyas Better Maps";
 FBM.EXTENSION_KEY = "FreyasBetterMaps";
 FBM.BOOKMARK_GIST_ID = "4eabb4efd75be5de6602bb0a31d5479b";

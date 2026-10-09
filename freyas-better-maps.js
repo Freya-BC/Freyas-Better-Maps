@@ -1,4 +1,4 @@
-/* Freyas Better Maps v0.1.35 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v0.1.36 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "0.1.35";
+  FBM.VERSION = "0.1.36";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.BOOKMARK_GIST_ID = "4eabb4efd75be5de6602bb0a31d5479b";
@@ -1526,12 +1526,16 @@
       FBM.installDrawButtonFilter();
       FBM.patchMapViewMethods();
       FBM.syncMapEditorPanel();
+      if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+      else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
       return ret;
     });
     FBM.tryHook("mapActivate", "ChatRoomMapViewActivate", 0, function(args, next) {
       const ret = next(args);
       FBM.patchMapViewMethods();
       FBM.syncMapEditorPanel();
+      if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+      else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
       return ret;
     });
     FBM.tryHook("mapShowEditor", "ChatRoomMapViewShowEditor", 0, function(args, next) {
@@ -2223,6 +2227,20 @@
     if (!FBM.mapIsAdmin()) return false;
     return true;
   };
+  FBM.buildBarStillOnMap = function() {
+    const m = FBM.mapBag();
+    if (!m.buildingTools) return false;
+    if (typeof ChatRoomMapViewIsActive === "function" && !ChatRoomMapViewIsActive()) return false;
+    if (!FBM.mapIsMapRoom()) return false;
+    if (!FBM.mapIsAdmin()) return false;
+    return true;
+  };
+  FBM.closeBuildBarIfOffMap = function() {
+    if (!FBM._buildBarOpen) return false;
+    if (FBM.buildBarStillOnMap()) return false;
+    FBM.setBuildBarOpen(false);
+    return true;
+  };
   FBM.getMainCanvasEl = function() {
     if (typeof MainCanvas !== "undefined" && MainCanvas && MainCanvas.canvas) return MainCanvas.canvas;
     return document.getElementById("MainCanvas");
@@ -2343,6 +2361,12 @@
     FBM.ensureUi();
     const bar = $3("fbm-build-bar");
     if (!bar) return;
+    if (FBM._buildBarOpen && !FBM.buildBarStillOnMap()) {
+      FBM._buildBarOpen = false;
+      FBM._buildBarPos = null;
+      FBM._buildBarDragging = false;
+      if (FBM.hideTemplatesUi) FBM.hideTemplatesUi();
+    }
     const show = FBM.buildBarShouldShow();
     bar.classList.toggle("fbm-show", show);
     if (!show) {
@@ -2383,7 +2407,10 @@
       if (!FBM._buildBarRaf) {
         const tick = function() {
           FBM._buildBarRaf = 0;
-          if (!FBM.buildBarShouldShow()) return;
+          if (!FBM.buildBarShouldShow()) {
+            if (FBM.refreshBuildBar) FBM.refreshBuildBar();
+            return;
+          }
           if (!FBM._buildBarDragging) FBM.layoutBuildBar();
           FBM._buildBarRaf = requestAnimationFrame(tick);
         };
@@ -2574,7 +2601,14 @@
       FBM.installMap();
       FBM.installDrawButtonFilter();
       FBM.patchMapViewMethods();
-      FBM.refreshBuildBar();
+      if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+      else FBM.refreshBuildBar();
+      return ret;
+    });
+    FBM.tryHook("commonSetScreen", "CommonSetScreen", 0, function(args, next) {
+      const ret = next(args);
+      if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+      else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
       return ret;
     });
     console.info("[FBM] Freyas Better Maps v" + FBM.VERSION + " ready");

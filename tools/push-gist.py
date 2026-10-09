@@ -24,7 +24,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULTS = ROOT / "src" / "defaults.js"
+DEFAULTS = ROOT / "src" / "defaults.ts"
 IIFE = ROOT / "freyas-better-maps.js"
 ENV_LOCAL = ROOT / ".env.local"
 GIST_FILE = "freyas-better-maps.js"

@@ -653,6 +653,8 @@ FBM.installMap = function () {
 		FBM.installDrawButtonFilter();
 		FBM.patchMapViewMethods();
 		FBM.syncMapEditorPanel();
+		if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+		else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
 		return ret;
 	});
 
@@ -660,6 +662,8 @@ FBM.installMap = function () {
 		const ret = next(args);
 		FBM.patchMapViewMethods();
 		FBM.syncMapEditorPanel();
+		if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
+		else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
 		return ret;
 	});
 
