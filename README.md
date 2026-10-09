@@ -1,5 +1,7 @@
 # Freyas Better Maps
 
+![Freyas Better Maps](assets/freyas-better-maps-logo.jpg)
+
 Bondage Club **map** helpers: typing bubbles, optional blindfold silhouettes, collapsed build toolbar, hearing-range whisper, SuperZoom, building grid, region copy/paste templates, and a small map library with autosave.
 
 ## Install
@@ -51,13 +53,11 @@ Bookmark gist: https://gist.github.com/Freya-BC/4eabb4efd75be5de6602bb0a31d5479b
 ## Build
 
 ```bash
-python3 tools/build-userscript.py
+npm install
+npm run build          # typecheck + esbuild + artifacts (skips gist)
+npm run build:gist     # same, then PATCH bookmark gist
 ```
 
-Bumps patch in `FBM.VERSION`, writes userscript + IIFE + loader + bookmark, and PATCHes the Freya-BC bookmark gist (unless `FBM_SKIP_GIST=1`).
+Requires Node 18+. Source is TypeScript (`src/`) with `bc-stubs`. Build bumps `FBM.VERSION`, emits userscript + IIFE + loader + bookmark. Skip gist with `FBM_SKIP_GIST=1` (default for `npm run build`).
 
-## Docs
-
-- [`docs/PLUGIN.md`](docs/PLUGIN.md) — compact plugin reference + source layout
-- [`docs/GIST.md`](docs/GIST.md) — bookmark gist notes
-- [`docs/TESTPLAN.md`](docs/TESTPLAN.md) — manual checks
+FUSAM / Pages entry: `https://freya-bc.github.io/Freyas-Better-Maps/loader.js`
