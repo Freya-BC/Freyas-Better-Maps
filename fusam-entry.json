@@ -1,20 +1,16 @@
 {
 	"id": "FBM",
+	"icon": "https://freya-bc.github.io/Freyas-Better-Maps/assets/freyas-better-maps-logo.jpg",
 	"name": "Freyas Better Maps",
-	"description": "Bondage Club map helpers: typing bubbles, build tools, templates, map library, hearing-range whisper, SuperZoom.",
-	"author": "FreyaCoding",
-	"repository": "",
-	"website": "",
-	"tags": ["enhancements", "maps"],
+	"description": "Bondage Club map helpers: typing bubbles, copy and paste, build tools, templates, map library, hearing-range whisper, SuperZoom.",
+	"author": "Freya",
+	"repository": "https://github.com/Freya-BC/Freyas-Better-Maps",
+	"tags": ["enhancements"],
 	"type": "script",
 	"versions": [
 		{
 			"distribution": "stable",
-			"source": ""
-		},
-		{
-			"distribution": "dev",
-			"source": ""
+			"source": "https://freya-bc.github.io/Freyas-Better-Maps/loader.js"
 		}
 	]
 }

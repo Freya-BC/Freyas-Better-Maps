@@ -1,7 +1,5 @@
 # Freyas Better Maps
 
-![Freyas Better Maps](assets/freyas-better-maps-logo.jpg)
-
 Bondage Club **map** helpers: typing bubbles, optional blindfold silhouettes, collapsed build toolbar, hearing-range whisper, SuperZoom, building grid, region copy/paste templates, and a small map library with autosave.
 
 ## Install
@@ -57,3 +55,9 @@ python3 tools/build-userscript.py
 ```
 
 Bumps patch in `FBM.VERSION`, writes userscript + IIFE + loader + bookmark, and PATCHes the Freya-BC bookmark gist (unless `FBM_SKIP_GIST=1`).
+
+## Docs
+
+- [`docs/PLUGIN.md`](docs/PLUGIN.md) — compact plugin reference + source layout
+- [`docs/GIST.md`](docs/GIST.md) — bookmark gist notes
+- [`docs/TESTPLAN.md`](docs/TESTPLAN.md) — manual checks

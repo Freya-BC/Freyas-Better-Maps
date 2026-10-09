@@ -1,10 +1,7 @@
-/**
- * Freyas Better Maps — injected CSS
- */
-(function (FBM) {
-	"use strict";
+/** Freyas Better Maps — ui/styles.js */
+import { FBM } from "../fbm";
 
-	FBM.STYLES = `
+FBM.STYLES = `
 /* R132+ Club map editor is HTML (#chat-room-map-view-panel), not canvas DrawButton */
 #chat-room-map-view-panel.fbm-panel-collapsed {
 	display: none !important;
@@ -170,4 +167,3 @@
 		el.textContent = FBM.STYLES;
 		(document.head || document.documentElement).appendChild(el);
 	};
-})(window.FreyasBetterMaps = window.FreyasBetterMaps || {});
