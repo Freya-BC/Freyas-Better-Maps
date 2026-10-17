@@ -1,4 +1,4 @@
-/* Freyas Better Maps v0.1.38 — post-login stub. FUSAM type: script. Loads the full bundle after Player.MemberNumber. */
+/* Freyas Better Maps v0.1.39 — post-login stub. FUSAM type: script. Loads the full bundle after Player.MemberNumber. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsLoader) return;
@@ -21,7 +21,7 @@
 			src = src.replace(/loader\.js(\?.*)?$/, "freyas-better-maps.js$1");
 		}
 		if (!src) return;
-		if (src.indexOf("v=") < 0) src += (src.indexOf("?") >= 0 ? "&" : "?") + "v=" + "0.1.38";
+		if (src.indexOf("v=") < 0) src += (src.indexOf("?") >= 0 ? "&" : "?") + "v=" + "0.1.39";
 		var s = document.createElement("script");
 		s.src = src;
 		s.crossOrigin = "anonymous";

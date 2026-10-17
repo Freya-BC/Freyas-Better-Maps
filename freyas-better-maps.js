@@ -1,4 +1,4 @@
-/* Freyas Better Maps v0.1.38 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v0.1.39 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "0.1.38";
+  FBM.VERSION = "0.1.39";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.BOOKMARK_GIST_ID = "4eabb4efd75be5de6602bb0a31d5479b";
@@ -270,6 +270,16 @@
   };
 
   // src/core/sdk.ts
+  FBM.resolveGlobalPath = function(name) {
+    if (!name || typeof name !== "string") return void 0;
+    const parts = name.split(".");
+    let cur = globalThis;
+    for (let i = 0; i < parts.length; i++) {
+      if (cur == null || typeof cur !== "object" && typeof cur !== "function") return void 0;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  };
   FBM.registerBcModSdk = function() {
     if (FBM.bcMod) return FBM.bcMod;
     if (typeof bcModSdk !== "undefined" && bcModSdk && typeof bcModSdk.registerMod === "function") {
@@ -289,15 +299,44 @@
       sdk.hookFunction(name, priority, hook);
       return true;
     }
-    const win = window;
-    const original = win[name];
+    const parts = String(name || "").split(".");
+    if (parts.length === 1) {
+      const win = window;
+      const original2 = win[name];
+      if (typeof original2 !== "function") {
+        console.warn("[FBM] Cannot hook missing function " + name);
+        return false;
+      }
+      win[name] = function(...args) {
+        return hook(args, function(nextArgs) {
+          return original2.apply(window, nextArgs || args);
+        });
+      };
+      return true;
+    }
+    let parent = globalThis;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (parent == null || typeof parent !== "object" && typeof parent !== "function") {
+        console.warn("[FBM] Cannot hook missing path " + name);
+        return false;
+      }
+      parent = parent[parts[i]];
+    }
+    const key = parts[parts.length - 1];
+    if (parent == null || typeof parent !== "object" && typeof parent !== "function") {
+      console.warn("[FBM] Cannot hook missing path " + name);
+      return false;
+    }
+    const obj = parent;
+    const original = obj[key];
     if (typeof original !== "function") {
       console.warn("[FBM] Cannot hook missing function " + name);
       return false;
     }
-    win[name] = function(...args) {
+    console.warn("[FBM] ModSDK missing \u2014 raw wrap of " + name + " (may trip BCX if ModSDK loads later)");
+    obj[key] = function(...args) {
       return hook(args, function(nextArgs) {
-        return original.apply(window, nextArgs || args);
+        return original.apply(this, nextArgs || args);
       });
     };
     return true;
@@ -305,7 +344,8 @@
   FBM.tryHook = function(stateKey, name, priority, hook) {
     FBM._hookState = FBM._hookState || {};
     if (FBM._hookState[stateKey || name]) return true;
-    if (typeof window[name] !== "function" && typeof globalThis[name] !== "function") return false;
+    const target = FBM.resolveGlobalPath(name);
+    if (typeof target !== "function") return false;
     const ok = FBM.hookFunction(name, priority, hook);
     if (ok) FBM._hookState[stateKey || name] = true;
     return ok;
@@ -339,56 +379,40 @@
   };
   FBM.patchMapViewMethods = function() {
     if (typeof ChatRoomViews === "undefined" || !ChatRoomViews || !ChatRoomViews.Map) return false;
-    const map = ChatRoomViews.Map;
-    if (!map._fbmDrawUiPatched && typeof map.DrawUi === "function") {
-      const origDrawUi = map.DrawUi;
-      map._fbmOrigDrawUi = origDrawUi;
-      map.DrawUi = function(...args) {
-        FBM.installDrawButtonFilter();
-        const ret = origDrawUi.apply(this, args);
-        FBM.withLeftDrawButtons(function() {
-          if (FBM.drawMapChromeButtons) FBM.drawMapChromeButtons();
-        });
-        if (FBM.refreshBuildBar) FBM.refreshBuildBar();
-        return ret;
-      };
-      map._fbmDrawUiPatched = true;
-    }
-    if (!map._fbmClickPatched && typeof map.Click === "function") {
-      const origClick = map.Click;
-      map._fbmOrigClick = origClick;
-      map.Click = function(...args) {
-        if (FBM.handleMapChromeClick && FBM.handleMapChromeClick()) return;
-        if (FBM._copy && FBM._copy.mode && typeof MouseX === "number" && MouseX <= 1e3) {
-          const tile = FBM.mapTileFromMouse && FBM.mapTileFromMouse(MouseX, MouseY, 0, 0, 1e3, 1e3);
-          if (tile && FBM.copyHandleTileClick && FBM.copyHandleTileClick(tile)) return;
+    const drawOk = FBM.tryHook("mapViewDrawUi", "ChatRoomViews.Map.DrawUi", 10, function(args, next) {
+      FBM.installDrawButtonFilter();
+      const ret = next(args);
+      FBM.withLeftDrawButtons(function() {
+        if (FBM.drawMapChromeButtons) FBM.drawMapChromeButtons();
+      });
+      if (FBM.refreshBuildBar) FBM.refreshBuildBar();
+      return ret;
+    });
+    const clickOk = FBM.tryHook("mapViewClick", "ChatRoomViews.Map.Click", 10, function(args, next) {
+      if (FBM.handleMapChromeClick && FBM.handleMapChromeClick()) return;
+      if (FBM._copy && FBM._copy.mode && typeof MouseX === "number" && MouseX <= 1e3) {
+        const tile = FBM.mapTileFromMouse && FBM.mapTileFromMouse(MouseX, MouseY, 0, 0, 1e3, 1e3);
+        if (tile && FBM.copyHandleTileClick && FBM.copyHandleTileClick(tile)) return;
+      }
+      const before = typeof ChatRoomMapViewEditStarted !== "undefined" ? ChatRoomMapViewEditStarted : null;
+      const ret = next(args);
+      if (FBM.mapIsAdmin && FBM.mapIsAdmin()) {
+        if (ChatRoomMapViewEditMode === "Tile" || ChatRoomMapViewEditMode === "Object" || ChatRoomMapViewEditMode === "Effect") {
+          if (FBM.markMapDirty) FBM.markMapDirty();
+        } else if (before !== ChatRoomMapViewEditStarted && ChatRoomMapViewEditStarted) {
+          if (FBM.markMapDirty) FBM.markMapDirty();
         }
-        const before = typeof ChatRoomMapViewEditStarted !== "undefined" ? ChatRoomMapViewEditStarted : null;
-        const ret = origClick.apply(this, args);
-        if (FBM.mapIsAdmin && FBM.mapIsAdmin()) {
-          if (ChatRoomMapViewEditMode === "Tile" || ChatRoomMapViewEditMode === "Object" || ChatRoomMapViewEditMode === "Effect") {
-            if (FBM.markMapDirty) FBM.markMapDirty();
-          } else if (before !== ChatRoomMapViewEditStarted && ChatRoomMapViewEditStarted) {
-            if (FBM.markMapDirty) FBM.markMapDirty();
-          }
-        }
-        return ret;
-      };
-      map._fbmClickPatched = true;
-    }
-    if (!map._fbmKeyDownPatched && typeof map.KeyDown === "function") {
-      const origKeyDown = map.KeyDown;
-      map._fbmOrigKeyDown = origKeyDown;
-      map.KeyDown = function(...args) {
-        if (FBM.mapTypingTargetActive && FBM.mapTypingTargetActive()) {
-          if (FBM.clearMapMoveKeys) FBM.clearMapMoveKeys();
-          return false;
-        }
-        return origKeyDown.apply(this, args);
-      };
-      map._fbmKeyDownPatched = true;
-    }
-    return !!(map._fbmDrawUiPatched && map._fbmClickPatched);
+      }
+      return ret;
+    });
+    FBM.tryHook("mapViewKeyDown", "ChatRoomViews.Map.KeyDown", 20, function(args, next) {
+      if (FBM.mapTypingTargetActive && FBM.mapTypingTargetActive()) {
+        if (FBM.clearMapMoveKeys) FBM.clearMapMoveKeys();
+        return false;
+      }
+      return next(args);
+    });
+    return !!(drawOk && clickOk);
   };
   FBM.rebindMapViewMethods = function() {
     return FBM.patchMapViewMethods();
