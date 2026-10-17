@@ -1,4 +1,4 @@
-/* Freyas Better Maps v0.1.37 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v0.1.38 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "0.1.37";
+  FBM.VERSION = "0.1.38";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.BOOKMARK_GIST_ID = "4eabb4efd75be5de6602bb0a31d5479b";
@@ -1317,7 +1317,7 @@
     }
   };
   FBM.applyZoomSetting = function() {
-    const m = FBM.mapCfg();
+    const m = FBM.mapBag();
     if (typeof ChatRoomMapViewPerceptionRangeMax !== "number") return;
     const cur = ChatRoomMapViewPerceptionRangeMax;
     const want = !!(m.fullZoomOut && FBM.mapIsAdmin && FBM.mapIsAdmin());
@@ -1335,7 +1335,7 @@
   };
   FBM.zoomOutForBuild = function() {
     FBM.applyZoomSetting();
-    const m = FBM.mapCfg();
+    const m = FBM.mapBag();
     if (!m.fullZoomOut) {
       FBM.localMsg("FBM: enable Full map zoom-out in settings first.");
       return;

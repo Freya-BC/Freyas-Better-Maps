@@ -402,7 +402,7 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 /* ---------- zoom ---------- */
 
 FBM.applyZoomSetting = function () {
-	const m = FBM.mapCfg();
+	const m = FBM.mapBag();
 	if (typeof ChatRoomMapViewPerceptionRangeMax !== "number") return;
 	const cur = ChatRoomMapViewPerceptionRangeMax;
 	/* SuperZoom only while room admin — setting may stay on for non-admins. */
@@ -422,7 +422,7 @@ FBM.applyZoomSetting = function () {
 
 FBM.zoomOutForBuild = function () {
 	FBM.applyZoomSetting();
-	const m = FBM.mapCfg();
+	const m = FBM.mapBag();
 	if (!m.fullZoomOut) {
 		FBM.localMsg("FBM: enable Full map zoom-out in settings first.");
 		return;
