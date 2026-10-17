@@ -35,7 +35,7 @@ Bookmark gist: https://gist.github.com/Freya-BC/4eabb4efd75be5de6602bb0a31d5479b
 | Full blindfold | Off (others style: greyscale) |
 | Hide duplicate room-update chat | Off (cooldown 5 min) |
 | Hearing-range whisper | Off |
-| Full map zoom-out | Off |
+| Full map zoom-out | Off (effect: room admin only) |
 
 ## Features
 
@@ -46,7 +46,7 @@ Bookmark gist: https://gist.github.com/Freya-BC/4eabb4efd75be5de6602bb0a31d5479b
 - **Copy / templates** — AABB + tile toggle; thumbs in localStorage; paste at top-left click. Paste pushes an immediate room `ChatRoomAdmin` Update (same path as Club paint).
 - **Map storage** — up to 10 named maps + 1 autosave via `exportString` / `importString` (admin to load). Load also forces room sync. Autosave: dirty edits, 60s cooldown.
 - **Hearing whisper** — whisper allowed when the target is Club-hearable (audibility mask / walls) and within hearing tiles; SuperZoom’s raised `PerceptionRangeMax` does not widen whispers.
-- **Full zoom-out** — raise `ChatRoomMapViewPerceptionRangeMax` (CRABS SuperZoom pattern).
+- **Full zoom-out** — raise `ChatRoomMapViewPerceptionRangeMax` (CRABS SuperZoom pattern); **room admin only**.
 - **Full blindfold** — at max blind: walls darker grey, other non-walkable (locked doors, trees, glass, …) lighter grey; your tile black with full-color avatar; adjacent players as greyscale models or generic silhouettes (setting); else black.
 - **Hide room-update spam** — optional; suppress identical `ServerUpdateRoom` chat within a cooldown (default 5 min). Editor sees `Saved & synced · HH:MM:SS` on the build bar.
 

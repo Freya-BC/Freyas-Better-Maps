@@ -50,6 +50,7 @@ FBM.boot = function () {
 		FBM.installMap();
 		FBM.installDrawButtonFilter();
 		FBM.patchMapViewMethods();
+		if (FBM.applyZoomSetting) FBM.applyZoomSetting();
 		if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
 		else FBM.refreshBuildBar();
 		return ret;
@@ -58,6 +59,7 @@ FBM.boot = function () {
 	/* Leave chat / change screen — close build bar if we are no longer on the map. */
 	FBM.tryHook("commonSetScreen", "CommonSetScreen", 0, function (args: unknown[], next: (a: unknown[]) => unknown) {
 		const ret = next(args);
+		if (FBM.applyZoomSetting) FBM.applyZoomSetting();
 		if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
 		else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
 		return ret;

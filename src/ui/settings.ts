@@ -40,6 +40,8 @@ FBM.refreshSettingsUi = function () {
 	set("fbm-blindfold", s.fullBlindfold);
 	set("fbm-whisper", s.hearingWhisper);
 	set("fbm-zoom", s.fullZoomOut);
+	const zoomEl = inputEl("fbm-zoom");
+	if (zoomEl) zoomEl.disabled = !(FBM.mapIsAdmin && FBM.mapIsAdmin());
 	set("fbm-hide-room-update", s.hideRoomUpdateSpam);
 	const styleSel = selectEl("fbm-blindfold-style");
 	if (styleSel) {

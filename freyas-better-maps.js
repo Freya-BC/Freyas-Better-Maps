@@ -1,4 +1,4 @@
-/* Freyas Better Maps v0.1.36 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v0.1.37 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "0.1.36";
+  FBM.VERSION = "0.1.37";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.BOOKMARK_GIST_ID = "4eabb4efd75be5de6602bb0a31d5479b";
@@ -1317,10 +1317,11 @@
     }
   };
   FBM.applyZoomSetting = function() {
-    const m = FBM.mapBag();
+    const m = FBM.mapCfg();
     if (typeof ChatRoomMapViewPerceptionRangeMax !== "number") return;
     const cur = ChatRoomMapViewPerceptionRangeMax;
-    if (m.fullZoomOut) {
+    const want = !!(m.fullZoomOut && FBM.mapIsAdmin && FBM.mapIsAdmin());
+    if (want) {
       if (cur !== FBM.ZOOM_DEFAULT_MAX && cur !== FBM.ZOOM_SUPER_MAX) return;
       if (!FBM._zoomApplied) FBM._prevZoomMax = cur;
       ChatRoomMapViewPerceptionRangeMax = FBM.ZOOM_SUPER_MAX;
@@ -1334,9 +1335,13 @@
   };
   FBM.zoomOutForBuild = function() {
     FBM.applyZoomSetting();
-    const m = FBM.mapBag();
+    const m = FBM.mapCfg();
     if (!m.fullZoomOut) {
       FBM.localMsg("FBM: enable Full map zoom-out in settings first.");
+      return;
+    }
+    if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) {
+      FBM.localMsg("FBM: Full map zoom-out is admin-only.");
       return;
     }
     if (typeof ChatRoomMapViewPerceptionRange === "number" && typeof ChatRoomMapViewPerceptionRangeMax === "number") {
@@ -1804,7 +1809,7 @@
     FBM.injectStyles();
     const root = document.createElement("div");
     root.id = "fbm-root";
-    root.innerHTML = '<div class="fbm-build-bar" id="fbm-build-bar"><span class="fbm-bar-grip" id="fbm-bar-grip" title="Drag" aria-label="Drag build bar">\u22EE\u22EE</span><button type="button" class="fbm-btn" id="fbm-bar-grid">Grid</button><button type="button" class="fbm-btn" id="fbm-bar-copy">Copy</button><button type="button" class="fbm-btn" id="fbm-bar-save" disabled>Save selection</button><button type="button" class="fbm-btn" id="fbm-bar-paste">Paste\u2026</button><button type="button" class="fbm-btn" id="fbm-bar-settings">Settings</button><span class="fbm-bar-sync" id="fbm-bar-sync" hidden></span></div><div class="fbm-templates" id="fbm-templates" hidden><div class="fbm-templates-head"><span>Templates</span><button type="button" class="fbm-icon-btn" id="fbm-tpl-close" title="Close">\xD7</button></div><p class="fbm-muted fbm-hint">Select a room, then click the map tile for the top-left paste origin.</p><div class="fbm-tpl-grid" id="fbm-tpl-grid"></div></div><div class="fbm-panel" id="fbm-panel"><div class="fbm-header" id="fbm-header"><div class="fbm-header-title">Freyas Better Maps <span class="fbm-badge">settings</span></div><button type="button" class="fbm-icon-btn" id="fbm-close" title="Close">\xD7</button></div><div class="fbm-tabs" role="tablist"><button type="button" class="fbm-tab fbm-on" data-tab="general">General</button><button type="button" class="fbm-tab" data-tab="maps">Map storage</button><button type="button" class="fbm-tab" data-tab="about">About</button></div><div class="fbm-page fbm-on" id="fbm-page-general"><p class="fbm-muted fbm-hint">Local map helpers. Synced via ExtensionSettings. If FAM Map typing is also on, bubbles may double \u2014 turn one off.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-typing" /> <span>Show typing bubbles on the map</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-toolbar" /> <span>Hide Club map toolbar (R132 panel + zoom) behind a small +</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-building" /> <span>Allow building tools (FBM button on map bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-blindfold" /> <span>Full blindfold (grey walls; hide your tile)</span></label><div class="fbm-row fbm-indent" id="fbm-blindfold-style-row"><label class="fbm-muted" for="fbm-blindfold-style">Others look like</label><select id="fbm-blindfold-style"><option value="greyscale">Greyscale models</option><option value="silhouette">Generic silhouette</option></select></div><label class="fbm-check-row"><input type="checkbox" id="fbm-whisper" /> <span>Whisper at hearing range (walls apply; not SuperZoom)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-room-update" /> <span>Hide duplicate \u201Cupdated the room\u201D chat spam</span></label><div class="fbm-row fbm-indent" id="fbm-room-update-cool-row"><label class="fbm-muted" for="fbm-room-update-cool">Cooldown (minutes)</label><input type="number" id="fbm-room-update-cool" min="1" max="120" step="1" value="5" /></div><div class="fbm-section"><div class="fbm-section-head">Build bar hotkey</div><p class="fbm-muted fbm-hint">Toggles the floating build bar when the map is active (admin). Default Alt+B. Also use the FBM button on the left map bar.</p><div class="fbm-row"><input type="text" id="fbm-build-hotkey" placeholder="Alt+B" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-build-hotkey-capture">Capture</button></div></div><div class="fbm-status" id="fbm-status"></div></div><div class="fbm-page" id="fbm-page-maps"><p class="fbm-muted fbm-hint">Save uses Club map export (/mapcopy). Load requires admin (/mappaste). Limit 10 maps + 1 autosave.</p><div class="fbm-section"><div class="fbm-section-head">Save current map</div><div class="fbm-row"><input type="text" id="fbm-map-name" placeholder="Map name" maxlength="48" /><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-map-save">Save</button></div></div><div class="fbm-section"><div class="fbm-section-head">Load</div><div class="fbm-map-list" id="fbm-map-list"></div></div><div class="fbm-section"><div class="fbm-section-head">Autosave</div><p class="fbm-muted fbm-hint">After you edit the map, autosaves at most once per 60 seconds.</p><div class="fbm-map-item"><span id="fbm-autosave-label">Autosave \u2014 empty</span><button type="button" class="fbm-btn" id="fbm-autosave-load" disabled>Load</button></div></div></div><div class="fbm-page" id="fbm-page-about"><p class="fbm-muted fbm-hint">Version <span id="fbm-about-ver"></span>. Developed by Freya (245450).</p><p class="fbm-muted fbm-hint">Open via Preference \u2192 Extensions \u2192 Freyas Better Maps, or the build bar <strong>Settings</strong> button.</p><p class="fbm-muted fbm-hint">Expand a feature below for a short description and how to use it.</p><div class="fbm-about-feats">' + aboutFeat(
+    root.innerHTML = '<div class="fbm-build-bar" id="fbm-build-bar"><span class="fbm-bar-grip" id="fbm-bar-grip" title="Drag" aria-label="Drag build bar">\u22EE\u22EE</span><button type="button" class="fbm-btn" id="fbm-bar-grid">Grid</button><button type="button" class="fbm-btn" id="fbm-bar-copy">Copy</button><button type="button" class="fbm-btn" id="fbm-bar-save" disabled>Save selection</button><button type="button" class="fbm-btn" id="fbm-bar-paste">Paste\u2026</button><button type="button" class="fbm-btn" id="fbm-bar-settings">Settings</button><span class="fbm-bar-sync" id="fbm-bar-sync" hidden></span></div><div class="fbm-templates" id="fbm-templates" hidden><div class="fbm-templates-head"><span>Templates</span><button type="button" class="fbm-icon-btn" id="fbm-tpl-close" title="Close">\xD7</button></div><p class="fbm-muted fbm-hint">Select a room, then click the map tile for the top-left paste origin.</p><div class="fbm-tpl-grid" id="fbm-tpl-grid"></div></div><div class="fbm-panel" id="fbm-panel"><div class="fbm-header" id="fbm-header"><div class="fbm-header-title">Freyas Better Maps <span class="fbm-badge">settings</span></div><button type="button" class="fbm-icon-btn" id="fbm-close" title="Close">\xD7</button></div><div class="fbm-tabs" role="tablist"><button type="button" class="fbm-tab fbm-on" data-tab="general">General</button><button type="button" class="fbm-tab" data-tab="maps">Map storage</button><button type="button" class="fbm-tab" data-tab="about">About</button></div><div class="fbm-page fbm-on" id="fbm-page-general"><p class="fbm-muted fbm-hint">Local map helpers. Synced via ExtensionSettings. If FAM Map typing is also on, bubbles may double \u2014 turn one off.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-typing" /> <span>Show typing bubbles on the map</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-toolbar" /> <span>Hide Club map toolbar (R132 panel + zoom) behind a small +</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-building" /> <span>Allow building tools (FBM button on map bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-blindfold" /> <span>Full blindfold (grey walls; hide your tile)</span></label><div class="fbm-row fbm-indent" id="fbm-blindfold-style-row"><label class="fbm-muted" for="fbm-blindfold-style">Others look like</label><select id="fbm-blindfold-style"><option value="greyscale">Greyscale models</option><option value="silhouette">Generic silhouette</option></select></div><label class="fbm-check-row"><input type="checkbox" id="fbm-whisper" /> <span>Whisper at hearing range (walls apply; not SuperZoom)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max, admin only)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-room-update" /> <span>Hide duplicate \u201Cupdated the room\u201D chat spam</span></label><div class="fbm-row fbm-indent" id="fbm-room-update-cool-row"><label class="fbm-muted" for="fbm-room-update-cool">Cooldown (minutes)</label><input type="number" id="fbm-room-update-cool" min="1" max="120" step="1" value="5" /></div><div class="fbm-section"><div class="fbm-section-head">Build bar hotkey</div><p class="fbm-muted fbm-hint">Toggles the floating build bar when the map is active (admin). Default Alt+B. Also use the FBM button on the left map bar.</p><div class="fbm-row"><input type="text" id="fbm-build-hotkey" placeholder="Alt+B" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-build-hotkey-capture">Capture</button></div></div><div class="fbm-status" id="fbm-status"></div></div><div class="fbm-page" id="fbm-page-maps"><p class="fbm-muted fbm-hint">Save uses Club map export (/mapcopy). Load requires admin (/mappaste). Limit 10 maps + 1 autosave.</p><div class="fbm-section"><div class="fbm-section-head">Save current map</div><div class="fbm-row"><input type="text" id="fbm-map-name" placeholder="Map name" maxlength="48" /><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-map-save">Save</button></div></div><div class="fbm-section"><div class="fbm-section-head">Load</div><div class="fbm-map-list" id="fbm-map-list"></div></div><div class="fbm-section"><div class="fbm-section-head">Autosave</div><p class="fbm-muted fbm-hint">After you edit the map, autosaves at most once per 60 seconds.</p><div class="fbm-map-item"><span id="fbm-autosave-label">Autosave \u2014 empty</span><button type="button" class="fbm-btn" id="fbm-autosave-load" disabled>Load</button></div></div></div><div class="fbm-page" id="fbm-page-about"><p class="fbm-muted fbm-hint">Version <span id="fbm-about-ver"></span>. Developed by Freya (245450).</p><p class="fbm-muted fbm-hint">Open via Preference \u2192 Extensions \u2192 Freyas Better Maps, or the build bar <strong>Settings</strong> button.</p><p class="fbm-muted fbm-hint">Expand a feature below for a short description and how to use it.</p><div class="fbm-about-feats">' + aboutFeat(
       "Typing bubbles",
       "Shows a readable Talk bubble above characters who are typing on the map. Scales with zoom.",
       [
@@ -1875,9 +1880,9 @@
       ]
     ) + aboutFeat(
       "Full map zoom-out",
-      "Raises Club\u2019s map zoom maximum (SuperZoom-style) so you can see more of the map at once.",
+      "Raises Club\u2019s map zoom maximum (SuperZoom-style) so you can see more of the map at once. Only applies while you are a <strong>room admin</strong>.",
       [
-        "Enable <strong>Full map zoom-out</strong> under General.",
+        "Enable <strong>Full map zoom-out</strong> under General (checkbox is enabled when you are admin).",
         "Use Club\u2019s map zoom controls to pull back.",
         "If another mod already changed the zoom max away from Club\u2019s defaults, FBM leaves it alone."
       ]
@@ -1998,6 +2003,8 @@
     set("fbm-blindfold", s.fullBlindfold);
     set("fbm-whisper", s.hearingWhisper);
     set("fbm-zoom", s.fullZoomOut);
+    const zoomEl = inputEl("fbm-zoom");
+    if (zoomEl) zoomEl.disabled = !(FBM.mapIsAdmin && FBM.mapIsAdmin());
     set("fbm-hide-room-update", s.hideRoomUpdateSpam);
     const styleSel = selectEl("fbm-blindfold-style");
     if (styleSel) {
@@ -2601,12 +2608,14 @@
       FBM.installMap();
       FBM.installDrawButtonFilter();
       FBM.patchMapViewMethods();
+      if (FBM.applyZoomSetting) FBM.applyZoomSetting();
       if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
       else FBM.refreshBuildBar();
       return ret;
     });
     FBM.tryHook("commonSetScreen", "CommonSetScreen", 0, function(args, next) {
       const ret = next(args);
+      if (FBM.applyZoomSetting) FBM.applyZoomSetting();
       if (FBM.closeBuildBarIfOffMap) FBM.closeBuildBarIfOffMap();
       else if (FBM.refreshBuildBar) FBM.refreshBuildBar();
       return ret;

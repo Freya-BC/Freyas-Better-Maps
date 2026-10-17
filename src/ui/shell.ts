@@ -145,7 +145,7 @@ FBM.ensureUi = function () {
 		'<option value="silhouette">Generic silhouette</option>' +
 		"</select></div>" +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-whisper" /> <span>Whisper at hearing range (walls apply; not SuperZoom)</span></label>' +
-		'<label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max)</span></label>' +
+		'<label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max, admin only)</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-hide-room-update" /> <span>Hide duplicate “updated the room” chat spam</span></label>' +
 		'<div class="fbm-row fbm-indent" id="fbm-room-update-cool-row">' +
 		'<label class="fbm-muted" for="fbm-room-update-cool">Cooldown (minutes)</label>' +
@@ -250,9 +250,9 @@ FBM.ensureUi = function () {
 		) +
 		aboutFeat(
 			"Full map zoom-out",
-			"Raises Club’s map zoom maximum (SuperZoom-style) so you can see more of the map at once.",
+			"Raises Club’s map zoom maximum (SuperZoom-style) so you can see more of the map at once. Only applies while you are a <strong>room admin</strong>.",
 			[
-				"Enable <strong>Full map zoom-out</strong> under General.",
+				"Enable <strong>Full map zoom-out</strong> under General (checkbox is enabled when you are admin).",
 				"Use Club’s map zoom controls to pull back.",
 				"If another mod already changed the zoom max away from Club’s defaults, FBM leaves it alone.",
 			]

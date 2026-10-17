@@ -402,10 +402,12 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 /* ---------- zoom ---------- */
 
 FBM.applyZoomSetting = function () {
-	const m = FBM.mapBag();
+	const m = FBM.mapCfg();
 	if (typeof ChatRoomMapViewPerceptionRangeMax !== "number") return;
 	const cur = ChatRoomMapViewPerceptionRangeMax;
-	if (m.fullZoomOut) {
+	/* SuperZoom only while room admin — setting may stay on for non-admins. */
+	const want = !!(m.fullZoomOut && FBM.mapIsAdmin && FBM.mapIsAdmin());
+	if (want) {
 		if (cur !== FBM.ZOOM_DEFAULT_MAX && cur !== FBM.ZOOM_SUPER_MAX) return;
 		if (!FBM._zoomApplied) FBM._prevZoomMax = cur;
 		ChatRoomMapViewPerceptionRangeMax = FBM.ZOOM_SUPER_MAX;
@@ -420,9 +422,13 @@ FBM.applyZoomSetting = function () {
 
 FBM.zoomOutForBuild = function () {
 	FBM.applyZoomSetting();
-	const m = FBM.mapBag();
+	const m = FBM.mapCfg();
 	if (!m.fullZoomOut) {
 		FBM.localMsg("FBM: enable Full map zoom-out in settings first.");
+		return;
+	}
+	if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) {
+		FBM.localMsg("FBM: Full map zoom-out is admin-only.");
 		return;
 	}
 	if (typeof ChatRoomMapViewPerceptionRange === "number" && typeof ChatRoomMapViewPerceptionRangeMax === "number") {
@@ -434,6 +440,7 @@ FBM.zoomOutForBuild = function () {
 		if (typeof ChatRoomMapViewVisibilityMask !== "undefined") fillMask(ChatRoomMapViewVisibilityMask);
 	}
 };
+
 
 /* ---------- toolbar collapse + FBM tools button ---------- */
 
