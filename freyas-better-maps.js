@@ -1,4 +1,4 @@
-/* Freyas Better Maps v1.0.4 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v1.0.7 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "1.0.4";
+  FBM.VERSION = "1.0.7";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.EXTENSION_KEY_MAPS = "FreyasBetterMapsMaps";
@@ -684,6 +684,19 @@
     const on = !!(FBM.settings && FBM.settings.hideArrowKeys);
     if (typeof document !== "undefined" && document.body) {
       document.body.classList.toggle("fbm-hide-arrow-keys", on);
+    }
+    const controls = typeof ElementWrap === "function" ? ElementWrap("chat-room-map-controls") : typeof document !== "undefined" ? document.getElementById("chat-room-map-controls") : null;
+    if (controls && controls.classList) {
+      controls.classList.toggle("fbm-arrow-keys-hidden", on);
+      if (!on) {
+        if (controls.style) {
+          if (controls.style.display === "none") controls.style.removeProperty("display");
+          if (controls.style.visibility === "hidden") controls.style.removeProperty("visibility");
+          if (controls.style.pointerEvents === "none") controls.style.removeProperty("pointer-events");
+        }
+        controls.removeAttribute("aria-hidden");
+        controls.removeAttribute("inert");
+      }
     }
   };
   FBM.installDrawButtonFilter = function() {
@@ -2906,6 +2919,7 @@
   FBM._zoomApplied = false;
   FBM._prevZoomMax = null;
   FBM._buildBarOpen = false;
+  FBM._mapEditorPanelHidden = void 0;
   FBM.TOOLBAR_PLUS = { x: 10, y: 10, w: 36, h: 36 };
   FBM.TOOLBAR_FBM_COLLAPSED = { x: 10, y: 52, w: 36, h: 36 };
   FBM.TOOLBAR_BTN = 36;
@@ -2951,7 +2965,8 @@
     let collapse = cloneRect(FBM.TOOLBAR_COLLAPSE);
     let fbm = cloneRect(FBM.TOOLBAR_FBM_EXPANDED);
     let fullyOpen = false;
-    if (canvas && panel && elVisible(panel) && !panel.classList.contains("fbm-panel-collapsed")) {
+    const editorCollapsed = !!(editor && editor.classList.contains("fbm-panel-collapsed"));
+    if (canvas && panel && elVisible(panel) && !editorCollapsed) {
       const cr = canvas.getBoundingClientRect();
       if (cr.width > 1 && cr.height > 1) {
         const sx = 2e3 / cr.width;
@@ -3297,21 +3312,57 @@
     }
   };
   FBM.MAP_EDITOR_PANEL_ID = "chat-room-map-view-panel";
+  FBM.MAP_EDITOR_ID = "chat-room-map-view-panel-editor";
+  FBM.MAP_DIALOG_ID = "chat-room-map-view-dialog-menu";
   FBM.toolbarShouldHide = function() {
-    const m = FBM.mapBag();
+    const m = FBM.mapCfg();
     return !!(m.hideBuildToolbar && !FBM._toolbarExpanded);
   };
-  FBM.syncMapEditorPanel = function() {
-    const panel = typeof ElementWrap === "function" ? ElementWrap(FBM.MAP_EDITOR_PANEL_ID) : document.getElementById(FBM.MAP_EDITOR_PANEL_ID);
-    if (!panel) return false;
-    const hide = FBM.toolbarShouldHide();
-    panel.classList.toggle("fbm-panel-collapsed", hide);
+  function mapDomEl(id) {
+    if (!id) return null;
+    const el = typeof ElementWrap === "function" ? ElementWrap(id) : document.getElementById(id);
+    return el && el.nodeType === 1 ? el : null;
+  }
+  function setMapChromeCollapsed(el, hide) {
+    if (!el) return;
+    el.classList.toggle("fbm-panel-collapsed", hide);
     if (hide) {
-      panel.setAttribute("aria-hidden", "true");
-      panel.setAttribute("inert", "");
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("inert", "");
     } else {
+      el.removeAttribute("aria-hidden");
+      el.removeAttribute("inert");
+    }
+  }
+  FBM.syncMapEditorPanel = function() {
+    const hide = FBM.toolbarShouldHide();
+    const editor = mapDomEl(FBM.MAP_EDITOR_ID || "chat-room-map-view-panel-editor");
+    const dialog = mapDomEl(FBM.MAP_DIALOG_ID || "chat-room-map-view-dialog-menu");
+    const panel = mapDomEl(FBM.MAP_EDITOR_PANEL_ID || "chat-room-map-view-panel");
+    if (!editor && !panel) return false;
+    if (panel) {
+      panel.classList.remove("fbm-panel-collapsed");
       panel.removeAttribute("aria-hidden");
       panel.removeAttribute("inert");
+    }
+    setMapChromeCollapsed(editor, hide);
+    setMapChromeCollapsed(dialog, hide);
+    const prev = FBM._mapEditorPanelHidden;
+    FBM._mapEditorPanelHidden = hide;
+    if (prev === true && hide === false) {
+      try {
+        if (typeof ChatRoomMapViewResize === "function") ChatRoomMapViewResize(true);
+      } catch (e) {
+      }
+      try {
+        if (typeof ChatRoomMapViewReloadEditorPanel === "function") {
+          ChatRoomMapViewReloadEditorPanel(
+            false,
+            typeof ChatRoomMapViewLastSearch === "string" ? ChatRoomMapViewLastSearch : ""
+          );
+        }
+      } catch (e) {
+      }
     }
     return true;
   };
@@ -3607,14 +3658,17 @@
 
   // src/ui/styles.ts
   FBM.STYLES = `
-/* R132+ Club map editor is HTML (#chat-room-map-view-panel), not canvas DrawButton */
-#chat-room-map-view-panel.fbm-panel-collapsed {
+/* R132+ Club map editor chrome \u2014 collapse the editor/dialog, not the outer shell
+   (#chat-room-map-view-panel is a full-map positioning layer; hiding it broke R134 expand). */
+#chat-room-map-view-panel-editor.fbm-panel-collapsed,
+#chat-room-map-view-dialog-menu.fbm-panel-collapsed {
 	display: none !important;
 	pointer-events: none !important;
 	visibility: hidden !important;
 }
-/* Hide Club map movement / SuperPowers pad (HTML controls on newer Club) */
-body.fbm-hide-arrow-keys #chat-room-map-controls {
+/* Hide Club map movement / SuperPowers pad (HTML controls on R134+) */
+body.fbm-hide-arrow-keys #chat-room-map-controls,
+#chat-room-map-controls.fbm-arrow-keys-hidden {
 	display: none !important;
 	pointer-events: none !important;
 	visibility: hidden !important;
@@ -4683,11 +4737,13 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
 }
 `;
   FBM.injectStyles = function() {
-    if (document.getElementById("fbm-styles")) return;
-    const el = document.createElement("style");
-    el.id = "fbm-styles";
+    let el = document.getElementById("fbm-styles");
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "fbm-styles";
+      (document.head || document.documentElement).appendChild(el);
+    }
     el.textContent = FBM.STYLES;
-    (document.head || document.documentElement).appendChild(el);
   };
 
   // src/ui/dialogs.ts
@@ -5212,8 +5268,9 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       });
     }
     bindToggle("fbm-typing", "typingIndicator");
-    bindToggle("fbm-hide-toolbar", "hideBuildToolbar", function() {
+    bindToggle("fbm-hide-toolbar", "hideBuildToolbar", function(on) {
       FBM._toolbarExpanded = false;
+      if (!on) FBM._mapEditorPanelHidden = true;
       if (FBM.syncMapEditorPanel) FBM.syncMapEditorPanel();
     });
     bindToggle("fbm-hide-arrows", "hideArrowKeys", function() {

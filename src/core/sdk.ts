@@ -106,10 +106,33 @@ FBM.shouldSuppressMapArrowButtons = function (x, y) {
 	return x >= 790 && x <= 990 && y >= 860 && y <= 1000;
 };
 
+/**
+ * R134+: movement pad + SuperPowers are HTML `#chat-room-map-controls` (not canvas).
+ * Toggle body + element class every sync so a stuck hide never survives “option off”.
+ */
 FBM.syncHideArrowKeysDom = function () {
 	const on = !!(FBM.settings && FBM.settings.hideArrowKeys);
 	if (typeof document !== "undefined" && document.body) {
 		document.body.classList.toggle("fbm-hide-arrow-keys", on);
+	}
+	const controls =
+		typeof ElementWrap === "function"
+			? ElementWrap("chat-room-map-controls")
+			: typeof document !== "undefined"
+				? document.getElementById("chat-room-map-controls")
+				: null;
+	if (controls && controls.classList) {
+		controls.classList.toggle("fbm-arrow-keys-hidden", on);
+		if (!on) {
+			/* Clear accidental inline hides from older experiments / stuck styles. */
+			if (controls.style) {
+				if (controls.style.display === "none") controls.style.removeProperty("display");
+				if (controls.style.visibility === "hidden") controls.style.removeProperty("visibility");
+				if (controls.style.pointerEvents === "none") controls.style.removeProperty("pointer-events");
+			}
+			controls.removeAttribute("aria-hidden");
+			controls.removeAttribute("inert");
+		}
 	}
 };
 

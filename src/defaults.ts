@@ -1,7 +1,7 @@
 /** Freyas Better Maps — defaults.js */
 import { FBM } from "./fbm";
 
-FBM.VERSION = "1.0.4";
+FBM.VERSION = "1.0.7";
 FBM.FULL_NAME = "Freyas Better Maps";
 FBM.EXTENSION_KEY = "FreyasBetterMaps";
 /** Named maps live in their own synced key so settings changes never re-upload them. */

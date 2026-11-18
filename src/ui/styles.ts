@@ -2,14 +2,17 @@
 import { FBM } from "../fbm";
 
 FBM.STYLES = `
-/* R132+ Club map editor is HTML (#chat-room-map-view-panel), not canvas DrawButton */
-#chat-room-map-view-panel.fbm-panel-collapsed {
+/* R132+ Club map editor chrome — collapse the editor/dialog, not the outer shell
+   (#chat-room-map-view-panel is a full-map positioning layer; hiding it broke R134 expand). */
+#chat-room-map-view-panel-editor.fbm-panel-collapsed,
+#chat-room-map-view-dialog-menu.fbm-panel-collapsed {
 	display: none !important;
 	pointer-events: none !important;
 	visibility: hidden !important;
 }
-/* Hide Club map movement / SuperPowers pad (HTML controls on newer Club) */
-body.fbm-hide-arrow-keys #chat-room-map-controls {
+/* Hide Club map movement / SuperPowers pad (HTML controls on R134+) */
+body.fbm-hide-arrow-keys #chat-room-map-controls,
+#chat-room-map-controls.fbm-arrow-keys-hidden {
 	display: none !important;
 	pointer-events: none !important;
 	visibility: hidden !important;
@@ -1079,9 +1082,11 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
 `;
 
 	FBM.injectStyles = function () {
-		if (document.getElementById("fbm-styles")) return;
-		const el = document.createElement("style");
-		el.id = "fbm-styles";
+		let el = document.getElementById("fbm-styles") as HTMLStyleElement | null;
+		if (!el) {
+			el = document.createElement("style");
+			el.id = "fbm-styles";
+			(document.head || document.documentElement).appendChild(el);
+		}
 		el.textContent = FBM.STYLES;
-		(document.head || document.documentElement).appendChild(el);
 	};

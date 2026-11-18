@@ -5,6 +5,8 @@ FBM._toolbarExpanded = false;
 FBM._zoomApplied = false;
 FBM._prevZoomMax = null;
 FBM._buildBarOpen = false;
+/** Last hide state applied by syncMapEditorPanel (for hide→show restore). */
+FBM._mapEditorPanelHidden = undefined;
 
 /**
  * Collapsed: + at (10,10), FBM under it at (10,52).
@@ -81,7 +83,8 @@ FBM.computeMapChromeLayout = function () {
 	let fbm = cloneRect(FBM.TOOLBAR_FBM_EXPANDED);
 	let fullyOpen = false;
 
-	if (canvas && panel && elVisible(panel) && !panel.classList.contains("fbm-panel-collapsed")) {
+	const editorCollapsed = !!(editor && editor.classList.contains("fbm-panel-collapsed"));
+	if (canvas && panel && elVisible(panel) && !editorCollapsed) {
 		const cr = canvas.getBoundingClientRect();
 		if (cr.width > 1 && cr.height > 1) {
 			const sx = 2000 / cr.width;
@@ -506,30 +509,73 @@ FBM.zoomOutForBuild = function () {
 /* ---------- toolbar collapse + FBM tools button ---------- */
 
 FBM.MAP_EDITOR_PANEL_ID = "chat-room-map-view-panel";
+FBM.MAP_EDITOR_ID = "chat-room-map-view-panel-editor";
+FBM.MAP_DIALOG_ID = "chat-room-map-view-dialog-menu";
 
 FBM.toolbarShouldHide = function () {
-	const m = FBM.mapBag();
+	const m = FBM.mapCfg();
 	return !!(m.hideBuildToolbar && !FBM._toolbarExpanded);
 };
 
+function mapDomEl(id: string): HTMLElement | null {
+	if (!id) return null;
+	const el =
+		typeof ElementWrap === "function" ? ElementWrap(id) : document.getElementById(id);
+	return el && el.nodeType === 1 ? (el as HTMLElement) : null;
+}
+
+function setMapChromeCollapsed(el: HTMLElement | null, hide: boolean) {
+	if (!el) return;
+	el.classList.toggle("fbm-panel-collapsed", hide);
+	if (hide) {
+		el.setAttribute("aria-hidden", "true");
+		el.setAttribute("inert", "");
+	} else {
+		el.removeAttribute("aria-hidden");
+		el.removeAttribute("inert");
+	}
+}
+
 /**
- * R132+ draws zoom/edit chrome in #chat-room-map-view-panel (always created while map is active).
- * Hide via CSS class — do not ElementRemove (ShowEditor recreates it every DrawUi).
+ * R132+ map edit chrome is HTML. R133 rebuilt it from DrawUi every frame; R134 creates
+ * it once on Activate (`DrawUi` is empty) — do not leave the outer
+ * `#chat-room-map-view-panel` shell `display:none` (that broke expand on Live).
+ * Collapse the editor (+ dialog) only; on hide→show, Resize + ReloadEditorPanel.
  */
 FBM.syncMapEditorPanel = function () {
-	const panel =
-		typeof ElementWrap === "function"
-			? ElementWrap(FBM.MAP_EDITOR_PANEL_ID)
-			: document.getElementById(FBM.MAP_EDITOR_PANEL_ID);
-	if (!panel) return false;
 	const hide = FBM.toolbarShouldHide();
-	panel.classList.toggle("fbm-panel-collapsed", hide);
-	if (hide) {
-		panel.setAttribute("aria-hidden", "true");
-		panel.setAttribute("inert", "");
-	} else {
+	const editor = mapDomEl(FBM.MAP_EDITOR_ID || "chat-room-map-view-panel-editor");
+	const dialog = mapDomEl(FBM.MAP_DIALOG_ID || "chat-room-map-view-dialog-menu");
+	const panel = mapDomEl(FBM.MAP_EDITOR_PANEL_ID || "chat-room-map-view-panel");
+	if (!editor && !panel) return false;
+
+	/* Never keep the outer shell collapsed — clear legacy class from older builds. */
+	if (panel) {
+		panel.classList.remove("fbm-panel-collapsed");
 		panel.removeAttribute("aria-hidden");
 		panel.removeAttribute("inert");
+	}
+	setMapChromeCollapsed(editor, hide);
+	setMapChromeCollapsed(dialog, hide);
+
+	const prev = FBM._mapEditorPanelHidden;
+	FBM._mapEditorPanelHidden = hide;
+	if (prev === true && hide === false) {
+		try {
+			if (typeof ChatRoomMapViewResize === "function") ChatRoomMapViewResize(true);
+		} catch (e) {
+			/* ignore */
+		}
+		try {
+			if (typeof ChatRoomMapViewReloadEditorPanel === "function") {
+				ChatRoomMapViewReloadEditorPanel(
+					false,
+					typeof ChatRoomMapViewLastSearch === "string" ? ChatRoomMapViewLastSearch : ""
+				);
+			}
+		} catch (e) {
+			/* ignore */
+		}
 	}
 	return true;
 };

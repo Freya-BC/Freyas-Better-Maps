@@ -128,8 +128,10 @@ FBM.bindSettingsUi = function () {
 		});
 	}
 	bindToggle("fbm-typing", "typingIndicator");
-	bindToggle("fbm-hide-toolbar", "hideBuildToolbar", function () {
+	bindToggle("fbm-hide-toolbar", "hideBuildToolbar", function (on) {
 		FBM._toolbarExpanded = false;
+		/* Turning the feature off: force hide→show restore (Resize/Reload on R134). */
+		if (!on) FBM._mapEditorPanelHidden = true;
 		if (FBM.syncMapEditorPanel) FBM.syncMapEditorPanel();
 	});
 	bindToggle("fbm-hide-arrows", "hideArrowKeys", function () {
