@@ -36,13 +36,34 @@ function editRange(): number {
 	return r > 0 ? r : 0;
 }
 
+/**
+ * Disarm FBM paint and exit Club edit mode.
+ * R134: character clicks are ignored while EditMode is Tile/Object/ObjectSettings —
+ * clearing only ActiveTool left mode stuck after Esc/✕, so players could not be clicked.
+ */
 FBM.objectsClearBrush = function () {
 	FBM._objectsPaint.armed = false;
 	FBM._objectsPaint.kind = "";
 	FBM._objectsPaint.clubId = null;
 	FBM._objectsPaint.settings = null;
 	FBM._objectsPaint.lastPaintKey = "";
+	try {
+		if (typeof ChatRoomMapViewEditorSetMode === "function") {
+			ChatRoomMapViewEditorSetMode("", "");
+		} else {
+			ChatRoomMapViewEditMode = "";
+			ChatRoomMapViewEditObject = null;
+			if (typeof ChatRoomMapViewEditSubMode !== "undefined") ChatRoomMapViewEditSubMode = "";
+		}
+	} catch (e) {
+		/* ignore */
+	}
 	if (typeof ChatRoomMapViewSetActiveTool === "function") ChatRoomMapViewSetActiveTool("");
+	try {
+		if (typeof ChatRoomMapViewReloadEditorPanel === "function") ChatRoomMapViewReloadEditorPanel();
+	} catch (e) {
+		/* ignore */
+	}
 };
 
 FBM.objectsArmBrush = function (opts: {

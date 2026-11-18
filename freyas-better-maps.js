@@ -1,4 +1,4 @@
-/* Freyas Better Maps v1.0.7 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v1.0.9 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "1.0.7";
+  FBM.VERSION = "1.0.9";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.EXTENSION_KEY_MAPS = "FreyasBetterMapsMaps";
@@ -2608,7 +2608,21 @@
     FBM._objectsPaint.clubId = null;
     FBM._objectsPaint.settings = null;
     FBM._objectsPaint.lastPaintKey = "";
+    try {
+      if (typeof ChatRoomMapViewEditorSetMode === "function") {
+        ChatRoomMapViewEditorSetMode("", "");
+      } else {
+        ChatRoomMapViewEditMode = "";
+        ChatRoomMapViewEditObject = null;
+        if (typeof ChatRoomMapViewEditSubMode !== "undefined") ChatRoomMapViewEditSubMode = "";
+      }
+    } catch (e) {
+    }
     if (typeof ChatRoomMapViewSetActiveTool === "function") ChatRoomMapViewSetActiveTool("");
+    try {
+      if (typeof ChatRoomMapViewReloadEditorPanel === "function") ChatRoomMapViewReloadEditorPanel();
+    } catch (e) {
+    }
   };
   FBM.objectsArmBrush = function(opts) {
     if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) {
