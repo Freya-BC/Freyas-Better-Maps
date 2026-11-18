@@ -57,6 +57,18 @@ FBM.lzUnpack = function (raw) {
 		return raw;
 	}
 	if (typeof raw !== "string") return null;
+	const prefixB64 = FBM.LZ_PREFIX_B64 || "FBMLz2:";
+	if (raw.indexOf(prefixB64) === 0) {
+		const Lb = lz();
+		if (!Lb || !Lb.decompressFromBase64) return null;
+		let plainB64 = null;
+		try {
+			plainB64 = Lb.decompressFromBase64(raw.slice(prefixB64.length));
+		} catch (e) {
+			return null;
+		}
+		return plainB64 ? parseJson(plainB64) : null;
+	}
 	const prefix = FBM.LZ_PREFIX || "FBMLz1:";
 	if (raw.indexOf(prefix) === 0) {
 		const L = lz();
@@ -97,4 +109,22 @@ FBM.lzPackLocal = function (obj) {
 FBM.lzReadLocal = function (raw) {
 	const parsed = FBM.lzUnpack(raw);
 	return parsed && typeof parsed === "object" ? parsed : null;
+};
+
+/**
+ * Pack for ExtensionSettings (wire): plain JSON when small or when LZ does not help,
+ * else "FBMLz2:" + compressToBase64 (~1 byte/char on the wire; UTF16 costs ~3 bytes/char).
+ */
+FBM.lzPackSync = function (obj) {
+	const json = JSON.stringify(obj);
+	const min = FBM.LZ_MIN || 800;
+	const L = lz();
+	if (!L || typeof L.compressToBase64 !== "function" || json.length < min) return json;
+	try {
+		const packed = L.compressToBase64(json);
+		if (!packed || packed.length + 7 >= json.length) return json;
+		return (FBM.LZ_PREFIX_B64 || "FBMLz2:") + packed;
+	} catch (e) {
+		return json;
+	}
 };

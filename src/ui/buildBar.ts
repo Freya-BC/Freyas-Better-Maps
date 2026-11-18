@@ -12,6 +12,7 @@ FBM.setBuildBarOpen = function (on) {
 		FBM._buildBarPos = null;
 		FBM._buildBarDragging = false;
 		if (FBM.hideTemplatesUi) FBM.hideTemplatesUi();
+		if (FBM.closeObjectsBuild) FBM.closeObjectsBuild();
 	}
 	FBM.refreshBuildBar();
 	return FBM._buildBarOpen;
@@ -54,18 +55,21 @@ FBM.getMainCanvasEl = function () {
 	return document.getElementById("MainCanvas");
 };
 
-/** Club logical coords (2000×1000) → client pixels; map is left 1000×1000. */
+/** Club logical coords (2000×1000) → client pixels; map width follows SplitPosition. */
 FBM.mapAreaGeometry = function () {
 	const c = FBM.getMainCanvasEl();
 	if (!c || !c.getBoundingClientRect) return null;
 	const r = c.getBoundingClientRect();
 	if (!r.width || !r.height) return null;
+	const view = FBM.mapViewRect ? FBM.mapViewRect() : { Width: 1000 };
+	const frac = Math.max(0.05, Math.min(1, (Number(view.Width) || 1000) / 2000));
+	const mapW = r.width * frac;
 	return {
 		left: r.left,
 		top: r.top,
-		width: r.width / 2,
+		width: mapW,
 		height: r.height,
-		centerX: r.left + r.width / 4,
+		centerX: r.left + mapW / 2,
 		/* Top padding inside the map (Club Y ≈ 18) */
 		barTop: r.top + (18 / 1000) * r.height,
 	};
@@ -199,6 +203,11 @@ FBM.refreshBuildBar = function () {
 	}
 	const gridBtn = $("fbm-bar-grid");
 	if (gridBtn) gridBtn.classList.toggle("fbm-on", !!(FBM.settings && FBM.settings.gridOn));
+	const objectsBtn = $("fbm-bar-objects");
+	const objectsPanel = $("fbm-objects");
+	if (objectsBtn) objectsBtn.classList.toggle("fbm-on", !!(objectsPanel && !objectsPanel.hidden));
+	const objsetBtn = $("fbm-bar-objset");
+	if (objsetBtn) objsetBtn.classList.toggle("fbm-on", !!(FBM.settings && FBM.settings.copyObjectSettings !== false));
 	const saveBtn = $("fbm-bar-save") as HTMLButtonElement | null;
 	if (saveBtn) saveBtn.disabled = !(FBM._copy && FBM._copy.mode === "edit" && Object.keys(FBM._copy.cells || {}).length);
 	const copyBtn = $("fbm-bar-copy");
@@ -206,8 +215,14 @@ FBM.refreshBuildBar = function () {
 		const on = FBM._copy && (FBM._copy.mode === "a" || FBM._copy.mode === "b" || FBM._copy.mode === "edit");
 		copyBtn.classList.toggle("fbm-on", !!on);
 	}
-	const pasteBtn = $("fbm-bar-paste");
-	if (pasteBtn) pasteBtn.classList.toggle("fbm-on", !!(FBM._copy && FBM._copy.mode === "paste"));
+	const pasteBtn = $("fbm-bar-paste") as HTMLButtonElement | null;
+	if (pasteBtn) {
+		const copyBusy =
+			!!FBM._copy &&
+			(FBM._copy.mode === "a" || FBM._copy.mode === "b" || FBM._copy.mode === "edit");
+		pasteBtn.disabled = copyBusy;
+		pasteBtn.classList.toggle("fbm-on", !!(FBM._copy && FBM._copy.mode === "paste"));
+	}
 	const sync = $("fbm-bar-sync");
 	if (sync) {
 		if (FBM._roomSyncSavedAt) {
@@ -219,6 +234,7 @@ FBM.refreshBuildBar = function () {
 			sync.hidden = true;
 		}
 	}
+	if (FBM.refreshBuildBarStar) FBM.refreshBuildBarStar();
 	if (show) {
 		FBM._ensureBuildBarLayoutWatch();
 		if (FBM.bindBuildBarDrag) FBM.bindBuildBarDrag();
@@ -270,7 +286,11 @@ FBM.refreshTemplatesUi = function () {
 		name.textContent = t.name || "Room";
 		const size = document.createElement("div");
 		size.className = "fbm-tpl-size";
-		size.textContent = (t.w || "?") + " × " + (t.h || "?");
+		size.textContent =
+			(t.w || "?") +
+			" × " +
+			(t.h || "?") +
+			(t.withObjectSettings ? " · obj" : "");
 		card.appendChild(del);
 		card.appendChild(thumbEl);
 		card.appendChild(name);
@@ -299,6 +319,25 @@ FBM.hideTemplatesUi = function () {
 	if (el) el.hidden = true;
 };
 
+FBM.refreshBuildBarStar = function () {
+	const star = $("fbm-bar-star") as HTMLButtonElement | null;
+	if (!star) return;
+	const show = !!(FBM.settings && FBM.settings.hideArrowKeys && FBM.mapIsAdmin && FBM.mapIsAdmin());
+	star.hidden = !show;
+	let active = false;
+	try {
+		active = !!ChatRoomMapViewSuperPowersActive;
+	} catch (e) {
+		active = false;
+	}
+	star.classList.toggle("fbm-on", active);
+	star.title = active ? "SuperPowers on" : "SuperPowers";
+	const img = $("fbm-bar-star-img") as HTMLImageElement | null;
+	if (img) {
+		img.src = "Icons/" + (active ? "SuperPowersActive" : "SuperPowersInactive") + ".png";
+	}
+};
+
 FBM.bindBuildBar = function () {
 	const gridBtn = $("fbm-bar-grid");
 	if (gridBtn && !gridBtn._fbmBound) {
@@ -307,6 +346,32 @@ FBM.bindBuildBar = function () {
 			FBM.settings.gridOn = !FBM.settings.gridOn;
 			FBM.saveSettings();
 			FBM.refreshBuildBar();
+		});
+	}
+	const starBtn = $("fbm-bar-star");
+	if (starBtn && !starBtn._fbmBound) {
+		starBtn._fbmBound = true;
+		starBtn.addEventListener("click", function () {
+			if (FBM.toggleMapSuperPowers) FBM.toggleMapSuperPowers();
+			FBM.refreshBuildBarStar();
+		});
+	}
+	const objectsBtn = $("fbm-bar-objects");
+	if (objectsBtn && !objectsBtn._fbmBound) {
+		objectsBtn._fbmBound = true;
+		objectsBtn.addEventListener("click", function () {
+			if (FBM.toggleObjectsBuild) FBM.toggleObjectsBuild();
+			FBM.refreshBuildBar();
+		});
+	}
+	const objsetBtn = $("fbm-bar-objset");
+	if (objsetBtn && !objsetBtn._fbmBound) {
+		objsetBtn._fbmBound = true;
+		objsetBtn.addEventListener("click", function () {
+			FBM.settings.copyObjectSettings = !(FBM.settings.copyObjectSettings !== false);
+			FBM.saveSettings();
+			FBM.refreshBuildBar();
+			if (FBM.refreshSettingsUi) FBM.refreshSettingsUi();
 		});
 	}
 	const copyBtn = $("fbm-bar-copy");
@@ -322,10 +387,16 @@ FBM.bindBuildBar = function () {
 	if (saveBtn && !saveBtn._fbmBound) {
 		saveBtn._fbmBound = true;
 		saveBtn.addEventListener("click", function () {
-			const name = prompt("Template name", "Room");
-			if (name == null) return;
-			FBM.copySaveTemplate(name);
-			FBM.refreshBuildBar();
+			if (!FBM.promptText) return;
+			FBM.promptText("Template name", {
+				initial: "Room",
+				confirmLabel: "Save",
+				maxlength: 40,
+			}).then(function (name: string | null) {
+				if (name == null) return;
+				FBM.copySaveTemplate(name);
+				FBM.refreshBuildBar();
+			});
 		});
 	}
 	const pasteBtn = $("fbm-bar-paste");

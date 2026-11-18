@@ -122,39 +122,131 @@ FBM.mapIsBlocked = function (X, Y) {
 	return false;
 };
 
-FBM.mapScreenFromTile = function (X, Y, Left, Top, Width, Height) {
+/**
+ * Live Club map draw rect. Prefer the last ChatRoomMapViewDrawGrid args (source of truth).
+ * Fallback is classic Club 1000×1000 — do not use ChatRoomMapViewSplitPosition as canvas
+ * width (often 2000 while DrawGrid still paints the left 1000).
+ */
+FBM.mapViewRect = function () {
+	const last = FBM._mapDrawRect;
+	if (
+		last &&
+		typeof last.Width === "number" &&
+		last.Width > 0 &&
+		typeof last.Height === "number" &&
+		last.Height > 0
+	) {
+		return {
+			Left: Number(last.Left) || 0,
+			Top: Number(last.Top) || 0,
+			Width: last.Width,
+			Height: last.Height,
+		};
+	}
+	return { Left: 0, Top: 0, Width: 1000, Height: 1000 };
+};
+
+/**
+ * Club tile layout for DrawGrid(Left, Top, Width, Height).
+ * Live Club (SplitPosition): square TileSize = Height/span, player centered via Offset.
+ * When Width === Height this matches classic R130/R133 stretch math too.
+ */
+FBM.mapTileLayout = function (Left, Top, Width, Height) {
+	Left = Number(Left);
+	Top = Number(Top);
+	Width = Number(Width);
+	Height = Number(Height);
+	if (!isFinite(Left)) Left = 0;
+	if (!isFinite(Top)) Top = 0;
+	if (!isFinite(Width) || Width <= 0) Width = 1000;
+	if (!isFinite(Height) || Height <= 0) Height = 1000;
 	const range = FBM.mapPerceptionRange();
-	const span = range * 2 + 1;
-	const TileWidth = Width / span;
-	const TileHeight = Height / span;
-	const px = Player.MapData.Pos.X;
-	const py = Player.MapData.Pos.Y;
-	const ScreenX = (X - px) * TileWidth + range * TileWidth;
-	const ScreenY = (Y - py) * TileHeight + range * TileWidth;
+	const span = Math.max(range * 2 + 1, 1);
+	const TileSize = Height / span;
+	if (!isFinite(TileSize) || TileSize <= 0) {
+		return {
+			Left: Left,
+			Top: Top,
+			Width: Width,
+			Height: Height,
+			range: range,
+			span: span,
+			TileSize: Width / span,
+			TileWidth: Width / span,
+			TileHeight: Height / span,
+			OffsetX: range * (Width / span),
+			OffsetY: range * (Width / span),
+		};
+	}
+	const OffsetX = (Width - TileSize) / 2;
+	const OffsetY = (Height - TileSize) / 2;
 	return {
-		ScreenX: ScreenX,
-		ScreenY: ScreenY,
-		TileWidth: TileWidth,
-		TileHeight: TileHeight,
-		Left: Left + ScreenX,
-		Top: Top + ScreenY,
+		Left: Left,
+		Top: Top,
+		Width: Width,
+		Height: Height,
+		range: range,
+		span: span,
+		TileSize: TileSize,
+		TileWidth: TileSize,
+		TileHeight: TileSize,
+		OffsetX: OffsetX,
+		OffsetY: OffsetY,
 	};
 };
 
-FBM.mapTileFromMouse = function (MouseX, MouseY, Left, Top, Width, Height) {
+FBM.mapScreenFromTile = function (X, Y, Left, Top, Width, Height) {
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const px = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.X : 0;
+	const py = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.Y : 0;
+	const tw = layout.TileWidth;
+	const th = layout.TileHeight;
+	const ScreenX = (X - px) * tw + layout.OffsetX;
+	const ScreenY = (Y - py) * th + layout.OffsetY;
+	return {
+		ScreenX: ScreenX,
+		ScreenY: ScreenY,
+		TileWidth: tw,
+		TileHeight: th,
+		TileSize: layout.TileSize,
+		Left: layout.Left + ScreenX,
+		Top: layout.Top + ScreenY,
+	};
+};
+
+FBM.mapTileFromMouse = function (mouseX, mouseY, Left, Top, Width, Height) {
 	if (!Player || !Player.MapData || !Player.MapData.Pos) return null;
-	const range = FBM.mapPerceptionRange();
-	const span = range * 2 + 1;
-	const TileWidth = Width / span;
-	const TileHeight = Height / span;
-	const relX = MouseX - Left;
-	const relY = MouseY - Top;
-	if (relX < 0 || relY < 0 || relX >= Width || relY >= Height) return null;
-	const tx = Math.floor(relX / TileWidth) - range + Player.MapData.Pos.X;
-	const ty = Math.floor(relY / TileHeight) - range + Player.MapData.Pos.Y;
+	if (typeof mouseX !== "number" || typeof mouseY !== "number" || !isFinite(mouseX) || !isFinite(mouseY)) {
+		return null;
+	}
+
+	/* Use the same rect we draw with (DrawGrid args / mapViewRect) — not Club's helper first.
+	 * Club PixelToTileCoordinates can disagree with DrawGrid when SplitPosition drifts. */
+	if (Left == null || Top == null || Width == null || Height == null) {
+		const view = FBM.mapViewRect();
+		Left = view.Left;
+		Top = view.Top;
+		Width = view.Width;
+		Height = view.Height;
+	}
+
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const tw = layout.TileWidth;
+	const th = layout.TileHeight;
+	if (!(tw > 0) || !(th > 0)) return null;
+
+	/* Reject pointer outside the map panel (chat side). */
+	if (mouseX < layout.Left || mouseX >= layout.Left + layout.Width) return null;
+	if (mouseY < layout.Top || mouseY >= layout.Top + layout.Height) return null;
+
+	const ScreenX = mouseX - layout.Left - layout.OffsetX;
+	const ScreenY = mouseY - layout.Top - layout.OffsetY;
+	const tx = Math.floor(ScreenX / tw) + Player.MapData.Pos.X;
+	const ty = Math.floor(ScreenY / th) + Player.MapData.Pos.Y;
 	const w = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
 	const h = typeof ChatRoomMapViewHeight === "number" ? ChatRoomMapViewHeight : 40;
 	if (tx < 0 || ty < 0 || tx >= w || ty >= h) return null;
+	if (!isFinite(tx) || !isFinite(ty)) return null;
 	return { X: tx, Y: ty };
 };
 

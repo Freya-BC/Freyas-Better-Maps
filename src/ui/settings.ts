@@ -36,7 +36,10 @@ FBM.refreshSettingsUi = function () {
 	};
 	set("fbm-typing", s.typingIndicator);
 	set("fbm-hide-toolbar", s.hideBuildToolbar);
+	set("fbm-hide-arrows", !!s.hideArrowKeys);
 	set("fbm-building", s.buildingTools);
+	set("fbm-invisible-walls", !!s.showInvisibleWalls);
+	set("fbm-copy-objset", s.copyObjectSettings !== false);
 	set("fbm-blindfold", s.fullBlindfold);
 	set("fbm-whisper", s.hearingWhisper);
 	set("fbm-zoom", s.fullZoomOut);
@@ -129,7 +132,12 @@ FBM.bindSettingsUi = function () {
 		FBM._toolbarExpanded = false;
 		if (FBM.syncMapEditorPanel) FBM.syncMapEditorPanel();
 	});
+	bindToggle("fbm-hide-arrows", "hideArrowKeys", function () {
+		if (FBM.syncHideArrowKeysDom) FBM.syncHideArrowKeysDom();
+	});
 	bindToggle("fbm-building", "buildingTools");
+	bindToggle("fbm-invisible-walls", "showInvisibleWalls");
+	bindToggle("fbm-copy-objset", "copyObjectSettings");
 	bindToggle("fbm-blindfold", "fullBlindfold", function () {
 		const styleSel = selectEl("fbm-blindfold-style");
 		if (styleSel) styleSel.disabled = !FBM.settings.fullBlindfold;

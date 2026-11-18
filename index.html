@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Freyas Better Maps — Bondage Club plugin</title>
+	<meta name="description" content="Freyas Better Maps: map QoL, build tools, Objects Build, copy/paste templates, map library, and Floatable Chat for Bondage Club." />
+	<link rel="icon" href="assets/freyas-better-maps-logo.jpg" />
+	<style>
+		:root {
+			--bg: #1c1626;
+			--panel: #2a2238;
+			--text: #f0e6d4;
+			--muted: #a898b0;
+			--gold: #d4a017;
+			--line: rgba(255, 255, 255, 0.12);
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+			color: var(--text);
+			background:
+				radial-gradient(ellipse at top, #3c3050 0%, transparent 55%),
+				var(--bg);
+		}
+		main {
+			max-width: 720px;
+			margin: 0 auto;
+			padding: 48px 20px 64px;
+		}
+		.hero {
+			display: flex;
+			gap: 20px;
+			align-items: center;
+			margin-bottom: 28px;
+		}
+		.hero img {
+			width: 88px;
+			height: 88px;
+			border-radius: 14px;
+			border: 1px solid var(--line);
+			background: rgba(20, 16, 28, 0.9);
+			object-fit: cover;
+		}
+		h1 {
+			margin: 0 0 6px;
+			font-size: 2rem;
+			letter-spacing: 0.02em;
+		}
+		.tag {
+			display: inline-block;
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--gold);
+			border: 1px solid rgba(212, 160, 23, 0.35);
+			border-radius: 999px;
+			padding: 2px 10px;
+		}
+		.lead {
+			color: var(--muted);
+			margin: 0 0 28px;
+			max-width: 58ch;
+		}
+		.panel {
+			background: rgba(42, 34, 56, 0.92);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 18px 20px;
+			margin-bottom: 16px;
+		}
+		.panel h2 {
+			margin: 0 0 10px;
+			font-size: 0.95rem;
+			color: var(--gold);
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+		ul {
+			margin: 0;
+			padding-left: 1.2em;
+		}
+		li { margin: 0.35em 0; }
+		a {
+			color: var(--gold);
+			text-decoration: none;
+		}
+		a:hover { text-decoration: underline; }
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 10px;
+		}
+		.card {
+			display: block;
+			padding: 12px 14px;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			background: rgba(28, 22, 38, 0.85);
+			color: var(--text);
+		}
+		.card:hover {
+			border-color: rgba(212, 160, 23, 0.55);
+			text-decoration: none;
+		}
+		.card strong {
+			display: block;
+			color: var(--gold);
+			margin-bottom: 4px;
+		}
+		.card span {
+			font-size: 0.88rem;
+			color: var(--muted);
+		}
+		.foot {
+			margin-top: 28px;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+		code {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			font-size: 0.9em;
+			background: rgba(0, 0, 0, 0.28);
+			padding: 0.1em 0.35em;
+			border-radius: 4px;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<div class="hero">
+			<img src="assets/freyas-better-maps-logo.jpg" width="88" height="88" alt="Freyas Better Maps logo" />
+			<div>
+				<h1>Freyas Better Maps</h1>
+				<span class="tag">Bondage Club plugin</span>
+			</div>
+		</div>
+		<p class="lead">
+			Map quality-of-life, a floating build bar, Objects Build, copy/paste templates,
+			map library, and Floatable Chat. Open settings from
+			<strong>Preference → Extensions → Freyas Better Maps</strong>
+			(or the build bar <strong>Settings</strong> button).
+		</p>
+
+		<section class="panel">
+			<h2>Guides</h2>
+			<div class="grid">
+				<a class="card" href="docs/view.html#README"><strong>Full README</strong><span>Install, overview, getting started</span></a>
+				<a class="card" href="docs/view.html#MAP_VIEW"><strong>Map View</strong><span>Typing, toolbar, blindfold, whisper, zoom</span></a>
+				<a class="card" href="docs/view.html#BUILD_BAR"><strong>Build Bar</strong><span>Grid, sync stamp, admin tools</span></a>
+				<a class="card" href="docs/view.html#OBJECTS_BUILD"><strong>Objects Build</strong><span>Catalog, brush, object settings</span></a>
+				<a class="card" href="docs/view.html#COPY_PASTE"><strong>Copy &amp; Paste</strong><span>AABB selection, templates, ghosts</span></a>
+				<a class="card" href="docs/view.html#MAP_STORAGE"><strong>Map Storage</strong><span>Named saves and autosave</span></a>
+				<a class="card" href="docs/view.html#FLOATABLE_CHAT"><strong>Floatable Chat</strong><span>Panel, members, themes, Seidr</span></a>
+				<a class="card" href="docs/view.html#COMMANDS"><strong>Commands</strong><span>/fbm, /build, /chat</span></a>
+				<a class="card" href="docs/view.html#SETTINGS"><strong>Settings</strong><span>General, Chat, Map storage, About</span></a>
+			</div>
+		</section>
+
+		<section class="panel">
+			<h2>Install</h2>
+			<ul>
+				<li><a href="bookmark.js">bookmark.js</a> — bookmark (loads gist IIFE; click again after updates)</li>
+				<li><a href="freyas-better-maps.user.js">freyas-better-maps.user.js</a> — Tampermonkey</li>
+				<li><a href="loader.js">loader.js</a> — FUSAM after login</li>
+				<li><a href="https://github.com/Freya-BC/Freyas-Better-Maps">GitHub repository</a></li>
+			</ul>
+		</section>
+
+		<p class="foot">Author Freya · Requires BCX / ModSDK in Club</p>
+	</main>
+</body>
+</html>

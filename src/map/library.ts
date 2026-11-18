@@ -50,7 +50,8 @@ FBM.importMapString = function (mapString) {
 		FBM.localMsg("FBM: map paste failed.");
 		return false;
 	}
-	FBM.pushMapRoomSync({ backup: backup });
+	/* importString already updateGlobalMapData + schedules room Update */
+	FBM.pushMapRoomSync({ backup: backup, skipUpdate: true });
 	FBM.localMsg("FBM: map loaded.");
 	return true;
 };

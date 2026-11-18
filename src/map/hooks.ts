@@ -169,37 +169,96 @@ FBM.mapDrawTypingIndicators = function (Left, Top, Width, Height) {
 	if (!m.typingIndicator) return 0;
 	if (!Player || !Player.MapData || !Player.MapData.Pos) return 0;
 	if (typeof ChatRoomCharacter === "undefined" || !ChatRoomCharacter) return 0;
-	Left = Number(Left) || 0;
-	Top = Number(Top) || 0;
-	Width = Number(Width) || 1000;
-	Height = Number(Height) || 1000;
-	const range = FBM.mapPerceptionRange();
-	const span = range * 2 + 1;
-	const TileWidth = Width / span;
-	const TileHeight = Height / span;
-	const px = Player.MapData.Pos.X;
-	const py = Player.MapData.Pos.Y;
+	if (typeof FBM.mapTileLayout !== "function" || typeof FBM.mapScreenFromTile !== "function") return 0;
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const TileSize = layout.TileSize;
+	if (!(TileSize > 0) || !isFinite(TileSize)) return 0;
 	const frame = FBM.mapTalkFrame();
 	const icon = FBM.mapTalkIconPath(frame);
-	const size = FBM.mapTalkSize(TileWidth);
+	const size = FBM.mapTalkSize(TileSize);
 	let drawn = 0;
 	ChatRoomCharacter.forEach(function (C) {
 		if (!FBM.mapShouldDrawTalk(C)) return;
 		if (!C.MapData || !C.MapData.Pos) return;
 		if (!FBM.mapCharVisible(C)) return;
-		const X = C.MapData.Pos.X;
-		const Y = C.MapData.Pos.Y;
-		const ScreenX = (X - px) * TileWidth + range * TileWidth;
-		const ScreenY = (Y - py) * TileHeight + range * TileWidth;
-		const CharX = Left + ScreenX + TileWidth * 0.05;
-		const CharY = Top + ScreenY - TileHeight * 0.85;
-		const zoom = (TileHeight * 1.8) / 1000;
+		const s = FBM.mapScreenFromTile(C.MapData.Pos.X, C.MapData.Pos.Y, layout.Left, layout.Top, layout.Width, layout.Height);
+		const CharX = s.Left + TileSize * 0.05;
+		const CharY = s.Top - TileSize * 0.85;
+		const zoom = (TileSize * 1.8) / 1000;
 		const bx = CharX + 250 * zoom - size.w / 2;
 		const by = CharY - size.h - 4 * size.scale;
 		if (typeof DrawImageResize === "function") DrawImageResize(icon, bx, by, size.w, size.h);
 		drawn += 1;
 	});
 	return drawn;
+};
+
+/* ---------- invisible walls (EmptySpace Impassable) ---------- */
+
+/** Red X over EmptySpace Impassable cells (Club edit-mode obstacle mark). */
+FBM.mapDrawInvisibleWalls = function (Left, Top, Width, Height) {
+	const m = FBM.mapBag();
+	if (!m || !m.showInvisibleWalls) return;
+	if (!Player || !Player.MapData || !Player.MapData.Pos) return;
+	const map =
+		typeof MapManager !== "undefined" && MapManager && MapManager.Map
+			? MapManager.Map
+			: null;
+	if (!map || typeof map.getObject !== "function") return;
+
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const TileSize = layout.TileSize;
+	const range = layout.range;
+	const w = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
+	const h = typeof ChatRoomMapViewHeight === "number" ? ChatRoomMapViewHeight : 40;
+	const px = Player.MapData.Pos.X;
+	const py = Player.MapData.Pos.Y;
+	const xMin = Math.max(0, px - range);
+	const xMax = Math.min(w - 1, px + range);
+	const yMin = Math.max(0, py - range);
+	const yMax = Math.min(h - 1, py + range);
+	const fogOn = typeof ChatRoomMapFogIsActive === "function" && ChatRoomMapFogIsActive();
+
+	function blocksStanding(obj) {
+		if (!obj || obj.Type !== "EmptySpace") return false;
+		if (typeof ChatRoomMapViewObjectBlocksStanding === "function") {
+			return !!ChatRoomMapViewObjectBlocksStanding(obj);
+		}
+		return !!(obj.CanEnter && obj.CanEnter("") === false);
+	}
+
+	function drawMark(rect) {
+		if (typeof ChatRoomMapViewDrawObstacleMark === "function") {
+			ChatRoomMapViewDrawObstacleMark(rect);
+			return;
+		}
+		if (typeof MainCanvas === "undefined" || !MainCanvas) return;
+		const insetX = rect.w * 0.18;
+		const insetY = rect.h * 0.18;
+		MainCanvas.save();
+		MainCanvas.beginPath();
+		MainCanvas.lineWidth = Math.max(2, Math.min(rect.w, rect.h) * 0.08);
+		MainCanvas.lineCap = "round";
+		MainCanvas.strokeStyle = "#e02020";
+		MainCanvas.moveTo(rect.x + insetX, rect.y + insetY);
+		MainCanvas.lineTo(rect.x + rect.w - insetX, rect.y + rect.h - insetY);
+		MainCanvas.moveTo(rect.x + rect.w - insetX, rect.y + insetY);
+		MainCanvas.lineTo(rect.x + insetX, rect.y + rect.h - insetY);
+		MainCanvas.stroke();
+		MainCanvas.restore();
+	}
+
+	for (let Y = yMin; Y <= yMax; Y++) {
+		for (let X = xMin; X <= xMax; X++) {
+			if (fogOn && typeof ChatRoomMapViewTileIsHidden === "function" && ChatRoomMapViewTileIsHidden(X, Y)) {
+				continue;
+			}
+			const obj = map.getObject(X, Y);
+			if (!blocksStanding(obj)) continue;
+			const s = FBM.mapScreenFromTile(X, Y, layout.Left, layout.Top, layout.Width, layout.Height);
+			drawMark({ x: s.Left, y: s.Top, w: TileSize, h: TileSize });
+		}
+	}
 };
 
 /* ---------- grid ---------- */
@@ -209,10 +268,8 @@ FBM.mapDrawGridOverlay = function (Left, Top, Width, Height) {
 	if (!m.buildingTools || !m.gridOn) return;
 	if (!Player || !Player.MapData || !Player.MapData.Pos) return;
 	if (typeof DrawEmptyRect !== "function" && typeof DrawRect !== "function") return;
-	const range = FBM.mapPerceptionRange();
-	const span = range * 2 + 1;
-	const TileWidth = Width / span;
-	const TileHeight = Height / span;
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const range = layout.range;
 	const w = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
 	const h = typeof ChatRoomMapViewHeight === "number" ? ChatRoomMapViewHeight : 40;
 	const px = Player.MapData.Pos.X;
@@ -226,13 +283,13 @@ FBM.mapDrawGridOverlay = function (Left, Top, Width, Height) {
 
 	function vline(worldX, color, thick) {
 		if (worldX < xMin || worldX > xMax) return;
-		const sx = Left + (worldX - px) * TileWidth + range * TileWidth;
-		if (typeof DrawRect === "function") DrawRect(sx, Top, thick || 1, Height, color);
+		const s = FBM.mapScreenFromTile(worldX, py, layout.Left, layout.Top, layout.Width, layout.Height);
+		if (typeof DrawRect === "function") DrawRect(s.Left, layout.Top, thick || 1, layout.Height, color);
 	}
 	function hline(worldY, color, thick) {
 		if (worldY < yMin || worldY > yMax) return;
-		const sy = Top + (worldY - py) * TileHeight + range * TileWidth;
-		if (typeof DrawRect === "function") DrawRect(Left, sy, Width, thick || 1, color);
+		const s = FBM.mapScreenFromTile(px, worldY, layout.Left, layout.Top, layout.Width, layout.Height);
+		if (typeof DrawRect === "function") DrawRect(layout.Left, s.Top, layout.Width, thick || 1, color);
 	}
 
 	for (let x = 0; x < w; x += 5) vline(x, "rgba(255,255,255,0.22)", 1);
@@ -249,13 +306,15 @@ FBM.mapIsMaxBlind = function () {
 };
 
 /** Club map avatar placement for a tile at (dx,dy) from player. */
-FBM.mapCharDrawPos = function (Left, Top, TileWidth, TileHeight, range, dx, dy) {
-	const ScreenX = Left + dx * TileWidth + range * TileWidth;
-	const ScreenY = Top + dy * TileHeight + range * TileWidth;
+FBM.mapCharDrawPos = function (Left, Top, Width, Height, dx, dy) {
+	const px = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.X : 0;
+	const py = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.Y : 0;
+	const s = FBM.mapScreenFromTile(px + dx, py + dy, Left, Top, Width, Height);
+	const TileSize = s.TileSize || s.TileWidth;
 	return {
-		x: ScreenX + TileWidth * 0.05,
-		y: ScreenY - TileHeight * 0.85,
-		zoom: (TileHeight * 1.8) / 1000,
+		x: s.Left + TileSize * 0.05,
+		y: s.Top - TileSize * 0.85,
+		zoom: (TileSize * 1.8) / 1000,
 	};
 };
 
@@ -341,10 +400,9 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 	const m = FBM.mapBag();
 	if (!m.fullBlindfold || !FBM.mapIsMaxBlind()) return;
 	if (!Player || !Player.MapData || !Player.MapData.Pos) return;
-	const range = FBM.mapPerceptionRange();
-	const span = range * 2 + 1;
-	const TileWidth = Width / span;
-	const TileHeight = Height / span;
+	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
+	const TileSize = layout.TileSize;
+	const range = layout.range;
 	const px = Player.MapData.Pos.X;
 	const py = Player.MapData.Pos.Y;
 	const w = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
@@ -357,19 +415,18 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 			const Y = py + dy;
 			if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
 			const cheb = Math.max(Math.abs(dx), Math.abs(dy));
-			const ScreenX = Left + dx * TileWidth + range * TileWidth;
-			const ScreenY = Top + dy * TileHeight + range * TileWidth;
+			const s = FBM.mapScreenFromTile(X, Y, layout.Left, layout.Top, layout.Width, layout.Height);
 			if (cheb > 1) {
-				if (typeof DrawRect === "function") DrawRect(ScreenX, ScreenY, TileWidth + 0.5, TileHeight + 0.5, "#000000");
+				if (typeof DrawRect === "function") DrawRect(s.Left, s.Top, TileSize + 0.5, TileSize + 0.5, "#000000");
 				continue;
 			}
 			/* cheb 0: hide player tile; cheb 1: darker walls / lighter blocked objects / black walkable */
 			const isWall = FBM.mapIsWall(X, Y);
 			const blocked = isWall || (FBM.mapIsBlocked ? FBM.mapIsBlocked(X, Y) : false);
 			if (cheb === 0 || !blocked) {
-				if (typeof DrawRect === "function") DrawRect(ScreenX, ScreenY, TileWidth + 0.5, TileHeight + 0.5, "#000000");
+				if (typeof DrawRect === "function") DrawRect(s.Left, s.Top, TileSize + 0.5, TileSize + 0.5, "#000000");
 			} else if (typeof DrawRect === "function") {
-				DrawRect(ScreenX, ScreenY, TileWidth + 0.5, TileHeight + 0.5, isWall ? "#3a3a3a" : "#7a7a7a");
+				DrawRect(s.Left, s.Top, TileSize + 0.5, TileSize + 0.5, isWall ? "#3a3a3a" : "#7a7a7a");
 			}
 		}
 	}
@@ -383,7 +440,7 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 			const dx = C.MapData.Pos.X - px;
 			const dy = C.MapData.Pos.Y - py;
 			if (Math.max(Math.abs(dx), Math.abs(dy)) > 1) return;
-			const pos = FBM.mapCharDrawPos(Left, Top, TileWidth, TileHeight, range, dx, dy);
+			const pos = FBM.mapCharDrawPos(layout.Left, layout.Top, layout.Width, layout.Height, dx, dy);
 			if (othersStyle === "silhouette") {
 				FBM.mapDrawGenericSilhouette(pos.x, pos.y, pos.zoom);
 			} else if (typeof DrawCharacter === "function") {
@@ -394,7 +451,7 @@ FBM.mapDrawBlindfold = function (Left, Top, Width, Height) {
 
 	/* Self: full-color avatar on top of blacked-out tile */
 	if (typeof DrawCharacter === "function") {
-		const self = FBM.mapCharDrawPos(Left, Top, TileWidth, TileHeight, range, 0, 0);
+		const self = FBM.mapCharDrawPos(layout.Left, layout.Top, layout.Width, layout.Height, 0, 0);
 		DrawCharacter(Player, self.x, self.y, self.zoom);
 	}
 };
@@ -489,9 +546,44 @@ function drawChromeIconButton(r, iconPath) {
 	}
 }
 
+FBM.toggleMapSuperPowers = function () {
+	if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) return false;
+	try {
+		ChatRoomMapViewSuperPowersActive = !ChatRoomMapViewSuperPowersActive;
+	} catch (e) {
+		return false;
+	}
+	try {
+		if (
+			typeof MapManager !== "undefined" &&
+			MapManager &&
+			MapManager.Map &&
+			typeof MapManager.Map.updatePlayerPerception === "function"
+		) {
+			MapManager.Map.updatePlayerPerception();
+		}
+	} catch (e) {
+		/* ignore */
+	}
+	const btn = document.getElementById("chat-room-map-superpowers-btn");
+	if (btn && typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.SetImage === "function") {
+		try {
+			ElementButton.SetImage(
+				btn,
+				"Icons/" + (ChatRoomMapViewSuperPowersActive ? "SuperPowersActive" : "SuperPowersInactive") + ".png"
+			);
+		} catch (e) {
+			/* ignore */
+		}
+	}
+	if (FBM.refreshBuildBarStar) FBM.refreshBuildBarStar();
+	return true;
+};
+
 FBM.drawMapChromeButtons = function () {
 	if (typeof ChatRoomMapViewIsActive === "function" && !ChatRoomMapViewIsActive()) return;
 	FBM.syncMapEditorPanel();
+	if (FBM.syncHideArrowKeysDom) FBM.syncHideArrowKeysDom();
 	if (typeof DrawButton !== "function") return;
 	const m = FBM.mapBag();
 	const layout = FBM.computeMapChromeLayout();
@@ -526,6 +618,18 @@ FBM.handleMapChromeClick = function () {
 	}
 	if (m.buildingTools && FBM.mapIsAdmin() && mouseInRect(layout.fbm)) {
 		FBM.setBuildBarOpen(!FBM._buildBarOpen);
+		return true;
+	}
+	/* Swallow Club arrow / SuperPowers pad clicks when those controls are hidden. */
+	if (
+		m.hideArrowKeys &&
+		typeof MouseX === "number" &&
+		typeof MouseY === "number" &&
+		MouseX >= 790 &&
+		MouseX <= 990 &&
+		MouseY >= 860 &&
+		MouseY <= 1000
+	) {
 		return true;
 	}
 	/* Legacy R130 canvas left-stack click swallow */
@@ -602,9 +706,14 @@ FBM.installUiKeyGuard = function () {
 		const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
 		if (!typing) return;
 		if (!t.closest || !t.closest("#fbm-root")) return;
+		if (FBM.clearMapMoveKeys) FBM.clearMapMoveKeys();
+		/*
+		 * Float chat compose must receive keydown (Enter = send, arrows = AC).
+		 * Stopping propagation here prevented those handlers from ever running.
+		 */
+		if (t.id === "fbm-fc-input" || (t.closest && t.closest("#fbm-fc-ac"))) return;
 		e.stopPropagation();
 		if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
-		if (FBM.clearMapMoveKeys) FBM.clearMapMoveKeys();
 	};
 	document.addEventListener("keydown", guard, true);
 	document.addEventListener("keyup", guard, true);
@@ -618,6 +727,8 @@ FBM.installMap = function () {
 	FBM.patchMapViewMethods();
 	if (FBM.installRoomUpdateHide) FBM.installRoomUpdateHide();
 	if (FBM.installCopyEscape) FBM.installCopyEscape();
+	if (FBM.installObjectsPaintHook) FBM.installObjectsPaintHook();
+	if (FBM.installObjectsSelectionEscape) FBM.installObjectsSelectionEscape();
 	FBM.installUiKeyGuard();
 
 	FBM.tryHook("mapKeyDown", "ChatRoomMapViewKeyDown", 20, function (args, next) {
@@ -636,16 +747,43 @@ FBM.installMap = function () {
 	});
 
 	FBM.tryHook("drawGrid", "ChatRoomMapViewDrawGrid", 4, function (args, next) {
-		FBM.patchMapViewMethods();
+		/* Club tiles first — never skip next() or a throw here blacks the screen. */
 		const ret = next(args);
 		const Left = args[0];
 		const Top = args[1];
 		const Width = args[2];
 		const Height = args[3];
-		FBM.mapDrawBlindfold(Left, Top, Width, Height);
-		FBM.mapDrawGridOverlay(Left, Top, Width, Height);
-		FBM.copyDrawHighlight(Left, Top, Width, Height);
-		FBM.mapDrawTypingIndicators(Left, Top, Width, Height);
+		FBM._mapDrawRect = {
+			Left: Number(Left) || 0,
+			Top: Number(Top) || 0,
+			Width: Number(Width) > 0 ? Number(Width) : 1000,
+			Height: Number(Height) > 0 ? Number(Height) : 1000,
+		};
+		const run = function (label, fn) {
+			try {
+				fn();
+			} catch (e) {
+				console.error("[FBM] map overlay:" + label, e);
+			}
+		};
+		run("patch", function () {
+			FBM.patchMapViewMethods();
+		});
+		run("blindfold", function () {
+			if (FBM.mapDrawBlindfold) FBM.mapDrawBlindfold(Left, Top, Width, Height);
+		});
+		run("invisibleWalls", function () {
+			if (FBM.mapDrawInvisibleWalls) FBM.mapDrawInvisibleWalls(Left, Top, Width, Height);
+		});
+		run("grid", function () {
+			if (FBM.mapDrawGridOverlay) FBM.mapDrawGridOverlay(Left, Top, Width, Height);
+		});
+		run("copyHighlight", function () {
+			if (FBM.copyDrawHighlight) FBM.copyDrawHighlight(Left, Top, Width, Height);
+		});
+		run("typing", function () {
+			if (FBM.mapDrawTypingIndicators) FBM.mapDrawTypingIndicators(Left, Top, Width, Height);
+		});
 		return ret;
 	});
 

@@ -14,7 +14,11 @@ export interface FBMSettings {
 	fullZoomOut: boolean;
 	hideRoomUpdateSpam: boolean;
 	roomUpdateHideCooldownMin: number;
+	/** Hide Club map arrow pad + SuperPowers; side-bar star toggles SuperPowers. */
+	hideArrowKeys: boolean;
 	gridOn: boolean;
+	showInvisibleWalls: boolean;
+	copyObjectSettings: boolean;
 	buildBarHotkey: string;
 	ui: {
 		left: number | null;
@@ -22,8 +26,50 @@ export interface FBMSettings {
 		width: number;
 		height: number;
 	};
+	floatChat: {
+		enabled: boolean;
+		autoshow: boolean;
+		/** Collapse Club chat when joining a room (uses SetSplitPosition / hide). */
+		autoCloseOnJoin: boolean;
+		hotkey: string;
+		hidden: boolean;
+		style: "dark" | "light" | "custom";
+		fontSize: number;
+		/** Panel see-through 0–60 (0 ≈ solid, 60 ≈ glass). Alpha = 1 − value/100. */
+		transparency: number;
+		fontFamily: string;
+		customCss: string;
+		/** Permanent image-host origins (e.g. https://i.imgur.com). */
+		trustedHosts: string[];
+		highlightOwn: boolean;
+		/** Names/words to highlight in message bodies. */
+		ownNames: string[];
+		/** Use Seidr gold accent instead of ownHighlightColor. */
+		ownHighlightSeidr: boolean;
+		ownHighlightColor: string;
+		/** Highlight other room members' names inside message bodies (Seidr color; not sender labels). */
+		highlightOthers: boolean;
+		/** Show target face crop beside float input while whispering. */
+		whisperAvatar: boolean;
+		/** Draw map compass arrow when hovering a name in float chat. */
+		mapCompass: boolean;
+		/** Confirm before Leave toolbar action. */
+		confirmLeave: boolean;
+		/** Refuse send when message body has unbalanced (). Default on. */
+		oocProtection: boolean;
+		/** Members pane height as % of log+members area (15–70). */
+		membersHeightPct: number;
+		ui: {
+			left: number | null;
+			top: number | null;
+			width: number;
+			height: number;
+		};
+	};
 	maps: unknown[];
 	autosave: unknown;
+	/** Changelog id dismissed via “Don’t show again”. */
+	dismissedChangelogId: string;
 	[key: string]: unknown;
 }
 

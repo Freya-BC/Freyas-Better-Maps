@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Freyas Better Maps docs</title>
+	<link rel="icon" href="../assets/freyas-better-maps-logo.jpg" />
+	<style>
+		:root {
+			--bg: #1c1626;
+			--panel: #2a2238;
+			--text: #f0e6d4;
+			--muted: #a898b0;
+			--gold: #d4a017;
+			--line: rgba(255, 255, 255, 0.12);
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+			color: var(--text);
+			background:
+				radial-gradient(ellipse at top, #3c3050 0%, transparent 55%),
+				var(--bg);
+		}
+		header {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 12px;
+			padding: 14px 20px;
+			border-bottom: 1px solid var(--line);
+			background: rgba(42, 34, 56, 0.95);
+		}
+		header a { color: var(--gold); text-decoration: none; }
+		header a:hover { text-decoration: underline; }
+		header .title { flex: 1; font-weight: 600; }
+		header .muted { color: var(--muted); font-size: 0.85rem; }
+		main {
+			max-width: 820px;
+			margin: 0 auto;
+			padding: 28px 20px 64px;
+		}
+		#status { color: var(--muted); }
+		#doc img {
+			max-width: 100%;
+			height: auto;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			background: #1c1626;
+			margin: 12px 0;
+		}
+		#doc h1, #doc h2, #doc h3 { color: var(--gold); }
+		#doc h1 { margin-top: 0; }
+		#doc a { color: var(--gold); }
+		#doc code {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+			font-size: 0.9em;
+			background: rgba(0, 0, 0, 0.28);
+			padding: 0.1em 0.35em;
+			border-radius: 4px;
+		}
+		#doc pre {
+			overflow: auto;
+			padding: 12px 14px;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			background: rgba(0, 0, 0, 0.28);
+		}
+		#doc pre code { background: none; padding: 0; }
+		#doc table {
+			border-collapse: collapse;
+			width: 100%;
+			margin: 12px 0;
+			font-size: 0.95rem;
+		}
+		#doc th, #doc td {
+			border: 1px solid var(--line);
+			padding: 8px 10px;
+			text-align: left;
+			vertical-align: top;
+		}
+		#doc th { background: rgba(42, 34, 56, 0.9); color: var(--gold); }
+		#doc blockquote {
+			margin: 12px 0;
+			padding: 8px 14px;
+			border-left: 3px solid var(--gold);
+			color: var(--muted);
+		}
+		#doc hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+	</style>
+</head>
+<body>
+	<header>
+		<a href="../index.html">Freyas Better Maps</a>
+		<span class="title" id="heading">Docs</span>
+		<a class="muted" id="raw" href="#">Raw .md</a>
+		<a class="muted" href="../README.md">README</a>
+	</header>
+	<main>
+		<p id="status">Loading…</p>
+		<article id="doc" hidden></article>
+	</main>
+	<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+	<script>
+	(function () {
+		var ALLOW = {
+			MAP_VIEW: "MAP_VIEW.md",
+			BUILD_BAR: "BUILD_BAR.md",
+			OBJECTS_BUILD: "OBJECTS_BUILD.md",
+			COPY_PASTE: "COPY_PASTE.md",
+			MAP_STORAGE: "MAP_STORAGE.md",
+			FLOATABLE_CHAT: "FLOATABLE_CHAT.md",
+			COMMANDS: "COMMANDS.md",
+			SETTINGS: "SETTINGS.md",
+			README: "../README.md"
+		};
+
+		function keyFromLocation() {
+			var hash = (location.hash || "").replace(/^#/, "").trim();
+			if (hash) return hash.toUpperCase().replace(/\.MD$/, "");
+			var q = new URLSearchParams(location.search).get("f");
+			if (q) return String(q).toUpperCase().replace(/\.MD$/, "");
+			return "README";
+		}
+
+		function rewriteDocLinks(root) {
+			root.querySelectorAll("a[href]").forEach(function (a) {
+				var href = a.getAttribute("href") || "";
+				var m = href.match(/^(?:\.\.\/)?(?:docs\/)?([A-Za-z0-9_-]+)\.md$/);
+				if (!m) return;
+				var key = m[1].toUpperCase();
+				if (ALLOW[key] || key === "README") {
+					a.setAttribute("href", "view.html#" + (key === "README" ? "README" : key));
+				}
+			});
+		}
+
+		function rewriteAssetPaths(root, fromReadme) {
+			if (!fromReadme) return;
+			root.querySelectorAll("img[src]").forEach(function (img) {
+				var src = img.getAttribute("src") || "";
+				if (!src || /^(https?:|data:|\/|\.\.\/)/i.test(src)) return;
+				img.setAttribute("src", "../" + src.replace(/^\.\//, ""));
+			});
+		}
+
+		async function load() {
+			var key = keyFromLocation();
+			var file = ALLOW[key];
+			var status = document.getElementById("status");
+			var doc = document.getElementById("doc");
+			var heading = document.getElementById("heading");
+			var raw = document.getElementById("raw");
+			if (!file) {
+				status.textContent = "Unknown doc. Try MAP_VIEW, BUILD_BAR, SETTINGS, …";
+				return;
+			}
+			heading.textContent = key === "README" ? "README" : key.replace(/_/g, " ");
+			raw.href = file;
+			raw.textContent = "Raw " + file.split("/").pop();
+			document.title = "Freyas Better Maps — " + heading.textContent;
+			try {
+				var res = await fetch(file, { cache: "no-cache" });
+				if (!res.ok) throw new Error("HTTP " + res.status);
+				var text = await res.text();
+				if (typeof marked === "undefined") throw new Error("Markdown library failed to load");
+				doc.innerHTML = marked.parse(text);
+				rewriteDocLinks(doc);
+				rewriteAssetPaths(doc, key === "README");
+				status.hidden = true;
+				doc.hidden = false;
+			} catch (e) {
+				status.hidden = false;
+				doc.hidden = true;
+				status.textContent = "Could not load " + file + " (" + (e && e.message ? e.message : e) + ")";
+			}
+		}
+
+		window.addEventListener("hashchange", load);
+		load();
+	})();
+	</script>
+</body>
+</html>

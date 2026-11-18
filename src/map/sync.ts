@@ -23,8 +23,21 @@ FBM.noteRoomSyncSaved = function (ts) {
 	if (FBM.refreshBuildBar) FBM.refreshBuildBar();
 };
 
+function mapApi() {
+	if (typeof MapManager !== "undefined" && MapManager && MapManager.Map) return MapManager.Map;
+	if (typeof ChatRoomMapManager !== "undefined" && ChatRoomMapManager && ChatRoomMapManager.Map) {
+		return ChatRoomMapManager.Map;
+	}
+	return null;
+}
+
 /**
- * After local MapData mutation: undo backup, perception, schedule immediate room Update.
+ * After local MapData mutation: undo backup (legacy), perception, schedule room Update.
+ *
+ * opts.viaMapManager — caller already mutated through MapManager; call updateGlobalMapData
+ * (new BC) which validates, encodes CellData/ObjectSettings, and schedules the room Update.
+ * opts.skipUpdate — MapManager already called updateGlobalMapData (e.g. importString).
+ * opts.backup — optional deep clone for ChatRoomMapViewEditBackup (legacy undo).
  */
 FBM.pushMapRoomSync = function (opts) {
 	opts = opts || {};
@@ -37,18 +50,59 @@ FBM.pushMapRoomSync = function (opts) {
 			ChatRoomMapViewEditBackup.push(backup);
 		}
 	}
-	if (typeof ChatRoomMapViewUpdateFlag === "function") ChatRoomMapViewUpdateFlag();
-	if (typeof ChatRoomMapViewUpdateRoomNext !== "undefined") {
-		ChatRoomMapViewUpdateRoomNext = typeof CommonTime === "function" ? CommonTime() : 0;
-	}
-	if (typeof ChatRoomMapViewCalculatePerceptionMasks === "function") {
-		ChatRoomMapViewCalculatePerceptionMasks();
-	}
+
 	let synced = false;
-	if (typeof ChatRoomMapViewUpdateRoomSync === "function") {
-		ChatRoomMapViewUpdateRoomSync();
+	const map = mapApi();
+
+	if (!opts.skipUpdate && opts.viaMapManager && map && typeof map.updateGlobalMapData === "function") {
+		try {
+			synced = !!map.updateGlobalMapData();
+		} catch (e) {
+			synced = false;
+		}
+	} else if (!opts.skipUpdate) {
+		/* Legacy Club: UpdateFlag + UpdateRoomSync. No-ops on upcoming BC. */
+		if (typeof ChatRoomMapViewUpdateFlag === "function") ChatRoomMapViewUpdateFlag();
+		if (typeof ChatRoomMapViewUpdateRoomNext !== "undefined") {
+			ChatRoomMapViewUpdateRoomNext = typeof CommonTime === "function" ? CommonTime() : 0;
+		}
+		if (typeof ChatRoomMapViewCalculatePerceptionMasks === "function") {
+			ChatRoomMapViewCalculatePerceptionMasks();
+		} else if (map && typeof map.updatePlayerPerception === "function") {
+			map.updatePlayerPerception();
+		}
+		if (typeof ChatRoomMapViewUpdateRoomSync === "function") {
+			ChatRoomMapViewUpdateRoomSync();
+			synced = true;
+		}
+		if (
+			!synced &&
+			typeof ChatRoomMapViewScheduleMapUpdate === "function" &&
+			map &&
+			typeof map.updateGlobalMapData === "function"
+		) {
+			/* Mutated ChatRoomData.MapData directly — reload MapManager then schedule. */
+			if (typeof MapManager !== "undefined" && MapManager && typeof MapManager.OnMapDataUpdated === "function") {
+				MapManager.OnMapDataUpdated();
+			} else if (typeof map.loadGlobalMapData === "function" && ChatRoomData && ChatRoomData.MapData) {
+				map.loadGlobalMapData(ChatRoomData.MapData);
+			}
+			try {
+				synced = !!map.updateGlobalMapData();
+			} catch (e) {
+				ChatRoomMapViewScheduleMapUpdate();
+				synced = true;
+			}
+		}
+	} else {
 		synced = true;
+		if (map && typeof map.updatePlayerPerception === "function") {
+			map.updatePlayerPerception();
+		} else if (typeof ChatRoomMapViewCalculatePerceptionMasks === "function") {
+			ChatRoomMapViewCalculatePerceptionMasks();
+		}
 	}
+
 	if (synced) FBM.noteRoomSyncSaved(Date.now());
 	FBM.markMapDirty();
 };
