@@ -176,7 +176,7 @@ FBM.ensureUi = function () {
 		'<button type="button" class="fbm-tab" data-tab="maps">Map storage</button>' +
 		'<button type="button" class="fbm-tab" data-tab="about">About</button></div>' +
 		'<div class="fbm-page fbm-on" id="fbm-page-general">' +
-		'<p class="fbm-muted fbm-hint">Local map helpers. Toggles are synced via ExtensionSettings; window positions stay on this device. If FAM Map typing is also on, bubbles may double — turn one off.</p>' +
+		'<p class="fbm-muted fbm-hint">Local map helpers. Toggles are synced via ExtensionSettings; window positions stay on this device. FBM map typing hides Club’s foot-level Talk icon; if FAM Map typing is also on, bubbles may still double — turn one off.</p>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-typing" /> <span>Show typing bubbles on the map</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-hide-toolbar" /> <span>Hide Club map toolbar (R132 panel + zoom) behind a small +</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-hide-arrows" /> <span>Hide Arrow Keys (and Club SuperPowers; ★ on the FBM build bar)</span></label>' +
@@ -291,7 +291,7 @@ FBM.ensureUi = function () {
 			[
 				"Turn on <strong>Show typing bubbles</strong> under General (on by default).",
 				"Join a map room and type — others with FBM see your bubble.",
-				"If FAM Map typing is also on, bubbles may stack; turn one off.",
+				"Hides Club’s small foot-level Talk icon on the map while this is on. If FAM Map typing is also on, bubbles may still stack; turn one off.",
 			]
 		) +
 		aboutFeat(

@@ -45,10 +45,11 @@ function elVisible(el) {
 }
 
 /**
- * Place − / FBM beside the Club HTML panel.
- * Narrow (no edit mode / items hidden): tuck next to the left button strip.
- * Fully open (data-edit-mode or wide items): sit clear of the grey panel + shadow,
- * Y aligned with the search field top.
+ * Place − / FBM beside the Club HTML *editor* (fit-content), never the outer
+ * #chat-room-map-view-panel — Club sizes that overlay to 1000×1000, so using its
+ * right edge parks −/FBM in the middle of the map.
+ * Narrow: tuck next to the left button strip.
+ * Edit mode (data-edit-mode on the editor): sit just past the grey editor box.
  */
 FBM.computeMapChromeLayout = function () {
 	const btn = FBM.TOOLBAR_BTN || 36;
@@ -67,8 +68,14 @@ FBM.computeMapChromeLayout = function () {
 			? FBM.getMainCanvasEl()
 			: document.getElementById("MainCanvas");
 	const panel = document.getElementById(FBM.MAP_EDITOR_PANEL_ID || "chat-room-map-view-panel");
-	const search = document.getElementById("chat-room-map-view-panel-search");
-	const buttons = document.getElementById("chat-room-map-view-panel-buttons-list");
+	/* R133+ IDs use the -editor- infix; keep legacy fallbacks. */
+	const editor = document.getElementById("chat-room-map-view-panel-editor");
+	const search =
+		document.getElementById("chat-room-map-view-panel-editor-search") ||
+		document.getElementById("chat-room-map-view-panel-search");
+	const buttons =
+		document.getElementById("chat-room-map-view-panel-editor-buttons-list") ||
+		document.getElementById("chat-room-map-view-panel-buttons-list");
 
 	let collapse = cloneRect(FBM.TOOLBAR_COLLAPSE);
 	let fbm = cloneRect(FBM.TOOLBAR_FBM_EXPANDED);
@@ -86,33 +93,32 @@ FBM.computeMapChromeLayout = function () {
 				};
 			};
 
-			/* Club sets data-edit-mode when tile/object/effect picker (search + items) is open. */
-			fullyOpen =
-				panel.hasAttribute("data-edit-mode") ||
-				(typeof ChatRoomMapViewEditMode !== "undefined" && !!ChatRoomMapViewEditMode);
+			/* data-edit-mode lives on #…-panel-editor, not the outer 1000×1000 panel. */
+			fullyOpen = !!(editor && editor.hasAttribute("data-edit-mode"));
 
-			const pr = panel.getBoundingClientRect();
+			const anchor = editor && elVisible(editor) ? editor : panel;
+			const ar = anchor.getBoundingClientRect();
 			const br = elVisible(buttons) ? buttons.getBoundingClientRect() : null;
 			let edgeClient;
 			let padClient;
 			let topClient;
 
 			if (fullyOpen) {
-				/* Full picker: right of grey panel, Y with search field. */
-				edgeClient = pr.right;
-				padClient = 16;
-				topClient = elVisible(search) ? search.getBoundingClientRect().top : pr.top + 4;
+				/* Full picker: just right of the fit-content editor (not the 1000-wide shell). */
+				edgeClient = ar.right;
+				padClient = 14;
+				topClient = elVisible(search) ? search.getBoundingClientRect().top : ar.top + 4;
 			} else {
-				/* Menu closed: beside tool strip, level with the first Club button (not the list padding). */
+				/* Menu closed: beside tool strip, level with the first Club button. */
 				const firstBtn =
 					buttons &&
 					(buttons.querySelector("button") ||
 						buttons.querySelector("[role='button']") ||
 						buttons.firstElementChild);
 				const fr = firstBtn && elVisible(firstBtn) ? firstBtn.getBoundingClientRect() : null;
-				edgeClient = fr ? fr.right : br ? br.right : pr.left + 68;
+				edgeClient = fr ? fr.right : br ? br.right : ar.left + 68;
 				padClient = 12;
-				topClient = fr ? fr.top : br ? br.top : pr.top + 2;
+				topClient = fr ? fr.top : br ? br.top : ar.top + 2;
 			}
 
 			const club = toClub(edgeClient + padClient, topClient);
@@ -120,15 +126,13 @@ FBM.computeMapChromeLayout = function () {
 			/* Below the floating build bar (higher than collapsed +). */
 			let y = FBM.TOOLBAR_COLLAPSE_Y != null ? FBM.TOOLBAR_COLLAPSE_Y : 58;
 			if (fullyOpen) {
-				/* Extra Club units past panel right so the grey box-shadow never clips the − */
-				x = Math.max(x, Math.round(toClub(pr.right, topClient).x + 22));
+				/* Stay near the editor; never use the outer panel’s mid-map right edge. */
+				x = Math.max(88, Math.min(x, 360));
 				if (elVisible(search)) {
 					const searchY = Math.round(toClub(0, search.getBoundingClientRect().top).y);
-					/* Prefer search top, but never sit under the build bar. */
 					y = Math.max(y, searchY);
 				}
 			} else {
-				/* Nudge right of the strip. */
 				x = Math.max(88, Math.min(x + 6, 130));
 			}
 
@@ -695,6 +699,57 @@ FBM.clearMapMoveKeys = function () {
 	}
 };
 
+/** True when focus is in float chat compose (or its autocomplete). */
+FBM.floatChatComposeFocused = function () {
+	const el = document.activeElement as HTMLElement | null;
+	if (!el) return false;
+	if (el.id === "fbm-fc-input") return true;
+	return !!(el.closest && el.closest("#fbm-float-chat") && (
+		(el.tagName || "").toUpperCase() === "TEXTAREA" ||
+		(el.tagName || "").toUpperCase() === "INPUT" ||
+		el.isContentEditable ||
+		(el.closest && el.closest("#fbm-fc-ac"))
+	));
+};
+
+/**
+ * Club KeyManager treats only #InputChat as "chat focused". Float compose is
+ * elsewhere, so map zoom (+/− etc.) and WASD still fire while typing there.
+ * Widen isChatRoomChatFocused / NOTFocused to include #fbm-fc-input.
+ */
+FBM.installKeybindingChatFocusPatch = function () {
+	if (FBM._keybindingChatFocusPatched) return true;
+	const KM =
+		typeof KeyManager !== "undefined" && KeyManager
+			? (KeyManager as {
+					getContext?: (id: string) => { prerequisite?: (e?: KeyboardEvent) => boolean } | undefined;
+			  })
+			: null;
+	if (!KM || typeof KM.getContext !== "function") return false;
+	const notFocused = KM.getContext("isChatRoomChatNOTFocused");
+	const focused = KM.getContext("isChatRoomChatFocused");
+	if (
+		!notFocused ||
+		!focused ||
+		typeof notFocused.prerequisite !== "function" ||
+		typeof focused.prerequisite !== "function"
+	) {
+		return false;
+	}
+	const prevNot = notFocused.prerequisite.bind(notFocused);
+	const prevYes = focused.prerequisite.bind(focused);
+	notFocused.prerequisite = function (event?: KeyboardEvent) {
+		if (FBM.floatChatComposeFocused && FBM.floatChatComposeFocused()) return false;
+		return prevNot(event);
+	};
+	focused.prerequisite = function (event?: KeyboardEvent) {
+		if (FBM.floatChatComposeFocused && FBM.floatChatComposeFocused()) return true;
+		return prevYes(event);
+	};
+	FBM._keybindingChatFocusPatched = true;
+	return true;
+};
+
 /** Stop Club map keys from seeing keystrokes typed inside FBM UI. */
 FBM.installUiKeyGuard = function () {
 	if (FBM._uiKeyGuardBound) return;
@@ -709,7 +764,9 @@ FBM.installUiKeyGuard = function () {
 		if (FBM.clearMapMoveKeys) FBM.clearMapMoveKeys();
 		/*
 		 * Float chat compose must receive keydown (Enter = send, arrows = AC).
-		 * Stopping propagation here prevented those handlers from ever running.
+		 * Do not stopPropagation here — that would also block text insertion
+		 * (capture runs before the textarea). Zoom/WASD are gated via
+		 * installKeybindingChatFocusPatch instead.
 		 */
 		if (t.id === "fbm-fc-input" || (t.closest && t.closest("#fbm-fc-ac"))) return;
 		e.stopPropagation();
@@ -730,11 +787,43 @@ FBM.installMap = function () {
 	if (FBM.installObjectsPaintHook) FBM.installObjectsPaintHook();
 	if (FBM.installObjectsSelectionEscape) FBM.installObjectsSelectionEscape();
 	FBM.installUiKeyGuard();
+	/* KeyManager contexts load async after TextPrefetch — retry briefly. */
+	if (!FBM.installKeybindingChatFocusPatch()) {
+		let tries = 0;
+		const timer = setInterval(function () {
+			tries += 1;
+			if (FBM.installKeybindingChatFocusPatch() || tries >= 40) clearInterval(timer);
+		}, 250);
+	}
 
 	FBM.tryHook("mapKeyDown", "ChatRoomMapViewKeyDown", 20, function (args, next) {
 		if (FBM.mapTypingTargetActive()) {
 			FBM.clearMapMoveKeys();
 			return false;
+		}
+		return next(args);
+	});
+
+	/*
+	 * Club DrawStatus parks Talk at character feet (Y+920*Zoom) — on map that reads as a
+	 * displaced tiny icon under FBM's head bubble. Skip Club Talk while our overlay is on.
+	 * Priority above BCX (10) so their DrawStatus pass-through never paints it either.
+	 */
+	FBM.tryHook("drawStatusHideTalkOnMap", "DrawStatus", 20, function (args, next) {
+		const C = args && args[0];
+		const m = FBM.mapCfg && FBM.mapCfg();
+		const onMap =
+			typeof ChatRoomMapViewIsActive === "function" && !!ChatRoomMapViewIsActive();
+		if (m && m.typingIndicator && onMap && C && C.Status === "Talk") {
+			if (
+				C.StatusTimer != null &&
+				typeof CommonTime === "function" &&
+				C.StatusTimer < CommonTime()
+			) {
+				C.StatusTimer = null;
+				C.Status = null;
+			}
+			return;
 		}
 		return next(args);
 	});

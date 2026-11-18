@@ -20,7 +20,7 @@ declare const ChatRoomToggleKneel: (() => void) | undefined;
 declare const ChatRoomOpenWardrobeScreen: (() => void) | undefined;
 declare const ChatRoomOpenInformationScreen: (() => void) | undefined;
 declare const ChatRoomOpenAdminScreen: (() => void) | undefined;
-declare const ChatRoomStatusUpdate: ((status: string) => void) | undefined;
+declare const ChatRoomStatusUpdate: ((status: string | null) => void) | undefined;
 declare const InformationSheetLoadCharacter: ((C: unknown) => void) | undefined;
 declare const CommonSetScreen: ((module: string, screen: string) => void) | undefined;
 declare const PreferenceOpenSubscreen: ((subscreen: string, page?: number) => void | Promise<void>) | undefined;
@@ -924,6 +924,7 @@ FBM.closeFloatChat = function (opts?: { fromAuto?: boolean }) {
 	FBM._floatChatAutoOpened = false;
 	/* User closed while Club chat may still be collapsed — don't autoshow-loop. */
 	if (!(opts && opts.fromAuto)) FBM._floatChatUserDismissed = true;
+	clearFloatChatTalkStatus();
 	FBM.saveSettings();
 	FBM.renderFloatChatAc([]);
 	clearSeidrCommandInput();
@@ -2241,6 +2242,55 @@ function detectComposeMode(raw: string): FcComposeMode {
 	return "chat";
 }
 
+/** Mirror Club ChatRoomStatusUpdateTalk for #fbm-fc-input (Club only watches #InputChat). */
+const FC_STATUS_DEAD_KEYS: Record<string, true> = {
+	Shift: true,
+	Control: true,
+	Alt: true,
+	Meta: true,
+	Fn: true,
+	Escape: true,
+	Dead: true,
+	ArrowLeft: true,
+	ArrowRight: true,
+	ArrowUp: true,
+	ArrowDown: true,
+};
+
+function clearFloatChatTalkStatus() {
+	if (typeof ChatRoomStatusUpdate !== "function") return;
+	try {
+		ChatRoomStatusUpdate(null);
+	} catch (e) {
+		/* ignore */
+	}
+}
+
+function floatChatStatusUpdateTalk(key?: string) {
+	if (typeof ChatRoomStatusUpdate !== "function") return;
+	if (key && FC_STATUS_DEAD_KEYS[key]) return;
+	const input = floatInputEl();
+	const text = String((input && input.value) || "");
+	let talking = true;
+	if (!text) talking = false;
+	else if (detectComposeMode(text) !== "chat") talking = false;
+	else if (clubWhisperTargetMn() != null) talking = false;
+	else if (
+		text.startsWith("/") &&
+		!text.startsWith("//") &&
+		!text.startsWith("/me ") &&
+		!text.startsWith("/action ")
+	) {
+		talking = false;
+	} else if (key === "Enter") talking = false;
+	else if (text.length <= 2) talking = false;
+	try {
+		ChatRoomStatusUpdate(talking ? "Talk" : null);
+	} catch (e) {
+		/* ignore */
+	}
+}
+
 function parseWhisperTargetMn(raw: string): number | null {
 	const m = /^\/(?:whisper|w)\s+(\d+)\b/i.exec(String(raw || "").trim());
 	if (!m) return null;
@@ -2418,6 +2468,7 @@ FBM.sendFloatChat = function (opts?: { asOoc?: boolean }) {
 	if (!input) return;
 	let raw = String(input.value || "").trim();
 	if (!raw) return;
+	clearFloatChatTalkStatus();
 
 	/*
 	 * Manual mistake: (/whisper 3 asd) — rewrite to /whisper 3 (asd) before send
@@ -3318,6 +3369,10 @@ FBM.bindFloatChatUi = function () {
 		input.addEventListener("input", function () {
 			FBM.scheduleFloatChatAc();
 			FBM.refreshFloatComposeMode();
+			floatChatStatusUpdateTalk();
+		});
+		input.addEventListener("keyup", function (e) {
+			floatChatStatusUpdateTalk(e.key);
 		});
 		input.addEventListener("focusin", function () {
 			try {
@@ -3329,6 +3384,7 @@ FBM.bindFloatChatUi = function () {
 			FBM.refreshFloatComposeMode();
 		});
 		input.addEventListener("blur", function () {
+			clearFloatChatTalkStatus();
 			setTimeout(function () {
 				try {
 					const ae = document.activeElement as HTMLElement | null;
