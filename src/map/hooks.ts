@@ -513,7 +513,7 @@ FBM.MAP_EDITOR_ID = "chat-room-map-view-panel-editor";
 FBM.MAP_DIALOG_ID = "chat-room-map-view-dialog-menu";
 
 FBM.toolbarShouldHide = function () {
-	const m = FBM.mapCfg();
+	const m = FBM.mapBag();
 	return !!(m.hideBuildToolbar && !FBM._toolbarExpanded);
 };
 
@@ -857,7 +857,7 @@ FBM.installMap = function () {
 	 */
 	FBM.tryHook("drawStatusHideTalkOnMap", "DrawStatus", 20, function (args, next) {
 		const C = args && args[0];
-		const m = FBM.mapCfg && FBM.mapCfg();
+		const m = FBM.mapBag && FBM.mapBag();
 		const onMap =
 			typeof ChatRoomMapViewIsActive === "function" && !!ChatRoomMapViewIsActive();
 		if (m && m.typingIndicator && onMap && C && C.Status === "Talk") {
