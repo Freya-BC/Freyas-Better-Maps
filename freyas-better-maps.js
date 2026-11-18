@@ -1,4 +1,4 @@
-/* Freyas Better Maps v1.0.2 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v1.0.3 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "1.0.2";
+  FBM.VERSION = "1.0.3";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.EXTENSION_KEY_MAPS = "FreyasBetterMapsMaps";
@@ -9043,10 +9043,13 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       corrected: body ? prefix + body : prefix
     };
   }
+  function stripOocSmileys(body) {
+    return String(body || "").replace(/[:=;8BxX][-^~]?[)(]/g, "");
+  }
   function oocParenBalanced(body) {
     let open = 0;
     let close = 0;
-    const s = String(body || "");
+    const s = stripOocSmileys(body);
     for (let i = 0; i < s.length; i++) {
       if (s[i] === "(") open++;
       else if (s[i] === ")") close++;
@@ -9101,11 +9104,9 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     if (!raw) return;
     const directed = splitDirectedCompose(raw);
     const cfg = fcCfg();
-    if (cfg.oocProtection !== false) {
-      if (!oocParenBalanced(directed.body)) {
-        refuseOocSend(directed.kind);
-        return;
-      }
+    if (cfg.oocProtection !== false && (directed.kind === "whisper" || directed.kind === "beep") && !oocParenBalanced(directed.body)) {
+      refuseOocSend(directed.kind);
+      return;
     }
     FBM.renderFloatChatAc([]);
     const hasExplicitDir = /^\/(?:whisper|w|beep)\b/i.test(raw);

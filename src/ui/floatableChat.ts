@@ -2344,10 +2344,18 @@ function parseMistakenOocWrappedCommand(raw: string): {
 	};
 }
 
+/**
+ * Drop western smileys whose ( / ) must not count as OOC delimiters
+ * (:) :-) :( :-( ;) ;-) =) etc.).
+ */
+function stripOocSmileys(body: string): string {
+	return String(body || "").replace(/[:=;8BxX][-^~]?[)(]/g, "");
+}
+
 function oocParenBalanced(body: string): boolean {
 	let open = 0;
 	let close = 0;
-	const s = String(body || "");
+	const s = stripOocSmileys(body);
 	for (let i = 0; i < s.length; i++) {
 		if (s[i] === "(") open++;
 		else if (s[i] === ")") close++;
@@ -2427,11 +2435,14 @@ FBM.sendFloatChat = function (opts?: { asOoc?: boolean }) {
 
 	const directed = splitDirectedCompose(raw);
 	const cfg = fcCfg();
-	if (cfg.oocProtection !== false) {
-		if (!oocParenBalanced(directed.body)) {
-			refuseOocSend(directed.kind);
-			return;
-		}
+	/* Paren balance only for whisper/beep — public chat often ends with :) etc. */
+	if (
+		cfg.oocProtection !== false &&
+		(directed.kind === "whisper" || directed.kind === "beep") &&
+		!oocParenBalanced(directed.body)
+	) {
+		refuseOocSend(directed.kind);
+		return;
 	}
 
 	FBM.renderFloatChatAc([]);
