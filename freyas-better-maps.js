@@ -1,4 +1,4 @@
-/* Freyas Better Maps v1.0.1 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v1.0.2 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "1.0.1";
+  FBM.VERSION = "1.0.2";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.EXTENSION_KEY_MAPS = "FreyasBetterMapsMaps";
@@ -4483,6 +4483,19 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
 }
 .fbm-fc-msg-system { background: var(--fbm-fc-system-bg); color: var(--fbm-fc-muted); }
 .fbm-fc-msg-system:nth-child(even) { background: var(--fbm-fc-system-bg); }
+/* WCE pending echo \u2014 muted lag cue; replaced by the real line on ack. */
+.fbm-fc-msg-pending {
+	opacity: 0.58;
+	border-left: 3px solid rgba(212, 160, 23, 0.55);
+	color: var(--fbm-fc-muted);
+}
+.fbm-fc-msg-pending .fbm-fc-msg-body,
+.fbm-fc-msg-pending .fbm-fc-msg-name,
+.fbm-fc-msg-pending .fbm-fc-msg-colon {
+	font-style: italic;
+	color: var(--fbm-fc-muted);
+}
+.fbm-fc-msg-pending .fbm-fc-reply-btn { display: none !important; }
 .fbm-fc-msg-beep {
 	background: rgba(61, 184, 160, 0.08);
 	border-left: 3px solid var(--fbm-fc-beep-mode);
@@ -7259,6 +7272,8 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     "www.bondageprojects.com"
   ];
   var sessionTrustedOrigins = /* @__PURE__ */ new Map();
+  var PENDING_LAG_MS = 180;
+  var pendingByNonce = /* @__PURE__ */ new Map();
   var TARGET_STRIP_RE = /^\/(beep|whisper|w)\s+\S+\s?/iu;
   var floatReplyState = null;
   var whisperAvatarMn = null;
@@ -8092,6 +8107,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
   function classifyClubDiv(div) {
     if (!div || !div.classList) return null;
     if (div.classList.contains("chat-room-sep")) return null;
+    const isPending = div.classList.contains("bce-pending");
     let type = "system";
     if (div.classList.contains("ChatMessageChat")) type = "chat";
     else if (div.classList.contains("ChatMessageWhisper")) type = "whisper";
@@ -8105,6 +8121,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     } else if (!div.classList.contains("ChatMessage")) {
       return null;
     }
+    if (isPending && type !== "chat" && type !== "emote" && type !== "action") return null;
     const nameBtn = div.querySelector(".ChatMessageName") || div.querySelector("button.ChatMessageName");
     let name = nameBtn ? (nameBtn.textContent || "").trim() : "";
     const senderEarly = div.getAttribute("data-sender") || div.querySelector(".chat-room-sender")?.textContent?.trim() || null;
@@ -8116,11 +8133,14 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     else {
       const clone = div.cloneNode(true);
       clone.querySelectorAll(
-        ".ChatMessageName, .chat-room-metadata, .chat-room-sender, button.ChatMessageName, .ReplyButton, .seidr-beep-reply-menu, .seidr-beep-reply-btn, .chat-room-message-popup, .chat-room-message-reply"
+        ".ChatMessageName, .chat-room-metadata, .chat-room-sender, button.ChatMessageName, .ReplyButton, .seidr-beep-reply-menu, .seidr-beep-reply-btn, .chat-room-message-popup, .chat-room-message-reply, .lds-ellipsis"
       ).forEach(function(n) {
         if (n.parentNode) n.parentNode.removeChild(n);
       });
       body = htmlElementToMultilineText(clone);
+    }
+    if ((type === "chat" || type === "whisper") && nameBtn) {
+      body = body.replace(/^:\s*/, "");
     }
     if (type === "action") {
       body = body.replace(/^\(+|\)+$/g, "").trim() || body;
@@ -8163,8 +8183,9 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     if (!body && !name) return null;
     const msgidEl = div.querySelector("[msgid]") || (div.hasAttribute("msgid") ? div : null);
     const msgid = msgidEl && msgidEl.getAttribute("msgid") || null;
-    const replyPreview = extractReplyPreview(div);
-    const key = msgid ? "msgid:" + msgid : "seq:" + String(++fcMsgSeq) + "|" + time + "|" + (id || "") + "|" + type;
+    const replyPreview = isPending ? null : extractReplyPreview(div);
+    const nonce = isPending ? div.getAttribute("data-nonce") : null;
+    const key = isPending && nonce ? "pending:" + nonce : msgid ? "msgid:" + msgid : "seq:" + String(++fcMsgSeq) + "|" + time + "|" + (id || "") + "|" + type;
     return {
       type,
       name,
@@ -8176,9 +8197,83 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       direction,
       targetId,
       senderId,
-      msgid,
-      replyPreview
+      msgid: isPending ? null : msgid,
+      replyPreview,
+      pending: isPending || void 0,
+      nonce: nonce || null
     };
+  }
+  function removeFloatChatRowByKey(key) {
+    if (!key) return;
+    const log = $6("fbm-fc-log");
+    if (!log) return;
+    const kids = log.children;
+    for (let i = kids.length - 1; i >= 0; i--) {
+      const el = kids[i];
+      if (el.getAttribute("data-key") === key) {
+        log.removeChild(el);
+      }
+    }
+  }
+  function clearPendingNonce(nonce) {
+    if (!nonce) return;
+    const track = pendingByNonce.get(nonce);
+    if (!track) return;
+    if (track.timer != null) {
+      clearTimeout(track.timer);
+      track.timer = null;
+    }
+    if (track.shown) removeFloatChatRowByKey(track.msg.key);
+    pendingByNonce.delete(nonce);
+  }
+  function clearPendingMatching(m) {
+    if (!m || m.pending) return;
+    const selfMn = selfMemberId();
+    if (!selfMn || (m.senderId || m.id) !== selfMn) return;
+    const body = String(m.body || "");
+    const type = m.type;
+    let matchNonce = null;
+    pendingByNonce.forEach(function(track, nonce) {
+      if (matchNonce) return;
+      if (track.msg.type === type && String(track.msg.body || "") === body) {
+        matchNonce = nonce;
+      }
+    });
+    if (matchNonce) clearPendingNonce(matchNonce);
+  }
+  function scheduleWcePending(m) {
+    const nonce = m.nonce;
+    if (!nonce) return;
+    clearPendingNonce(nonce);
+    const track = { nonce, timer: null, msg: m, shown: false };
+    pendingByNonce.set(nonce, track);
+    track.timer = setTimeout(function() {
+      track.timer = null;
+      if (!pendingByNonce.has(nonce)) return;
+      let still = false;
+      if (typeof document !== "undefined") {
+        const club = document.getElementById("TextAreaChatLog");
+        const kids = club ? club.querySelectorAll(".bce-pending") : [];
+        for (let i = 0; i < kids.length; i++) {
+          if (kids[i].getAttribute("data-nonce") === nonce) {
+            still = true;
+            break;
+          }
+        }
+      }
+      if (!still) {
+        pendingByNonce.delete(nonce);
+        return;
+      }
+      track.shown = true;
+      FBM.appendFloatChatMsg(m);
+    }, PENDING_LAG_MS);
+  }
+  function clearAllPendingTracks() {
+    pendingByNonce.forEach(function(_track, nonce) {
+      clearPendingNonce(nonce);
+    });
+    pendingByNonce.clear();
   }
   function renderBodyInto(body, m, wasAtEnd) {
     body.textContent = "";
@@ -8609,6 +8704,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     const row = document.createElement("article");
     row.className = "fbm-fc-msg fbm-fc-msg-" + m.type;
     if (m.direction) row.classList.add("fbm-fc-msg-dir-" + m.direction);
+    if (m.pending) row.classList.add("fbm-fc-msg-pending");
     row.dataset.key = m.key;
     row.setAttribute("data-fc-body", m.body || "");
     const issuerId = m.senderId || m.id;
@@ -8617,7 +8713,8 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     if (partnerId) row.setAttribute("data-fc-partner", partnerId);
     if (m.color) row.setAttribute("data-fc-color", m.color);
     if (m.msgid) row.setAttribute("data-fc-msgid", m.msgid);
-    if (issuerId || partnerId) {
+    if (m.nonce) row.setAttribute("data-fc-nonce", m.nonce);
+    if (!m.pending && (issuerId || partnerId)) {
       row.addEventListener("contextmenu", function(ev) {
         openFloatChatContextMenu(ev, m);
       });
@@ -8668,7 +8765,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     renderBodyInto(body, m, true);
     line.appendChild(body);
     main.appendChild(line);
-    if ((m.type === "chat" || m.type === "whisper" || m.type === "beep") && partnerId) {
+    if (!m.pending && (m.type === "chat" || m.type === "whisper" || m.type === "beep") && partnerId) {
       const reply = document.createElement("button");
       reply.type = "button";
       reply.className = "fbm-fc-reply-btn";
@@ -8747,19 +8844,29 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     const m = classifyClubDiv(div);
     if (!m) return;
     mirroredClubDivs.add(div);
+    if (m.pending) {
+      scheduleWcePending(m);
+      return;
+    }
+    clearPendingMatching(m);
     FBM.appendFloatChatMsg(m);
   };
   FBM.backfillFloatChat = function() {
     const club = document.getElementById("TextAreaChatLog");
     const log = $6("fbm-fc-log");
     if (!club || !log) return;
+    clearAllPendingTracks();
     log.innerHTML = "";
     const kids = club.children;
     for (let i = 0; i < kids.length; i++) {
       const el = kids[i];
       mirroredClubDivs.add(el);
       const m = classifyClubDiv(el);
-      if (m && !isExactMessageMuted(m)) log.appendChild(renderMsgRow(m));
+      if (!m || isExactMessageMuted(m)) continue;
+      if (m.pending && m.nonce) {
+        pendingByNonce.set(m.nonce, { nonce: m.nonce, timer: null, msg: m, shown: true });
+      }
+      log.appendChild(renderMsgRow(m));
     }
     while (log.children.length > LOG_CAP) {
       log.removeChild(log.firstChild);
@@ -9253,26 +9360,53 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     FBM.refreshFloatComposeMode();
   };
   FBM.installFloatChatMirror = function() {
-    if (FBM._floatChatMirrorHooked) return;
-    const ok = FBM.tryHook(
-      "floatChatAppend",
-      "ChatRoomAppendChat",
-      2,
-      function(args, next) {
-        const ret = next(args);
-        try {
-          const div = args && args[0];
-          if (div && div.nodeType === 1) {
-            FBM.mirrorClubChatDiv(div);
+    if (!FBM._floatChatMirrorHooked) {
+      const ok = FBM.tryHook(
+        "floatChatAppend",
+        "ChatRoomAppendChat",
+        2,
+        function(args, next) {
+          const ret = next(args);
+          try {
+            const div = args && args[0];
+            if (div && div.nodeType === 1) {
+              FBM.mirrorClubChatDiv(div);
+            }
+          } catch (e) {
+            console.warn("[FBM] float mirror", e);
           }
-        } catch (e) {
-          console.warn("[FBM] float mirror", e);
+          return ret;
         }
-        return ret;
-      }
-    );
-    if (ok) FBM._floatChatMirrorHooked = true;
+      );
+      if (ok) FBM._floatChatMirrorHooked = true;
+    }
+    installFloatChatPendingWatch();
   };
+  function installFloatChatPendingWatch() {
+    if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+    const bind = function() {
+      const club = document.getElementById("TextAreaChatLog");
+      if (!club || club._fbmPendingObs) return;
+      const obs = new MutationObserver(function(records) {
+        for (let r = 0; r < records.length; r++) {
+          const removed = records[r].removedNodes;
+          for (let i = 0; i < removed.length; i++) {
+            const node = removed[i];
+            if (!node || node.nodeType !== 1) continue;
+            const el = node;
+            if (el.classList && el.classList.contains("bce-pending")) {
+              clearPendingNonce(el.getAttribute("data-nonce"));
+            }
+          }
+        }
+      });
+      obs.observe(club, { childList: true });
+      club._fbmPendingObs = true;
+    };
+    bind();
+    setTimeout(bind, 0);
+    setTimeout(bind, 120);
+  }
   FBM.installFloatChatHotkey = function() {
     if (FBM._floatChatHotkeyBound) return;
     FBM._floatChatHotkeyBound = true;

@@ -137,7 +137,22 @@ type FcMsg = {
 	senderId?: string | null;
 	msgid?: string | null;
 	replyPreview?: FcReplyPreview | null;
+	/** WCE `bce-pending` local echo (lag indicator). */
+	pending?: boolean;
+	nonce?: string | null;
 };
+
+/** Only paint WCE pending in float chat if the server ack is slower than this. */
+const PENDING_LAG_MS = 180;
+
+type PendingTrack = {
+	nonce: string;
+	timer: ReturnType<typeof setTimeout> | null;
+	msg: FcMsg;
+	shown: boolean;
+};
+
+const pendingByNonce = new Map<string, PendingTrack>();
 
 type FcReplyState = {
 	kind: FcReplyKind;
@@ -1191,6 +1206,7 @@ function extractSpeakerLabelColor(
 function classifyClubDiv(div: HTMLElement): FcMsg | null {
 	if (!div || !div.classList) return null;
 	if (div.classList.contains("chat-room-sep")) return null;
+	const isPending = div.classList.contains("bce-pending");
 
 	let type: FcType = "system";
 	if (div.classList.contains("ChatMessageChat")) type = "chat";
@@ -1212,6 +1228,8 @@ function classifyClubDiv(div: HTMLElement): FcMsg | null {
 	} else if (!div.classList.contains("ChatMessage")) {
 		return null;
 	}
+	/* WCE pending only covers Chat / Emote / Action — ignore other pending shapes. */
+	if (isPending && type !== "chat" && type !== "emote" && type !== "action") return null;
 
 	const nameBtn =
 		(div.querySelector(".ChatMessageName") as HTMLElement | null) ||
@@ -1235,12 +1253,16 @@ function classifyClubDiv(div: HTMLElement): FcMsg | null {
 		const clone = div.cloneNode(true) as HTMLElement;
 		clone
 			.querySelectorAll(
-				".ChatMessageName, .chat-room-metadata, .chat-room-sender, button.ChatMessageName, .ReplyButton, .seidr-beep-reply-menu, .seidr-beep-reply-btn, .chat-room-message-popup, .chat-room-message-reply"
+				".ChatMessageName, .chat-room-metadata, .chat-room-sender, button.ChatMessageName, .ReplyButton, .seidr-beep-reply-menu, .seidr-beep-reply-btn, .chat-room-message-popup, .chat-room-message-reply, .lds-ellipsis"
 			)
 			.forEach(function (n) {
 				if (n.parentNode) n.parentNode.removeChild(n);
 			});
 		body = htmlElementToMultilineText(clone);
+	}
+	/* Club/WCE leave a literal ": " text node outside .chat-room-message-content. */
+	if ((type === "chat" || type === "whisper") && nameBtn) {
+		body = body.replace(/^:\s*/, "");
 	}
 	/* Action OOC wrappers only — emotes already include * from Club; do not strip/re-add. */
 	if (type === "action") {
@@ -1296,11 +1318,14 @@ function classifyClubDiv(div: HTMLElement): FcMsg | null {
 		(div.querySelector("[msgid]") as HTMLElement | null) ||
 		(div.hasAttribute("msgid") ? div : null);
 	const msgid = (msgidEl && msgidEl.getAttribute("msgid")) || null;
-	const replyPreview = extractReplyPreview(div);
-	/* Prefer Club msgid; otherwise a monotonic seq so "Test"×3 in one second still shows. */
-	const key = msgid
-		? "msgid:" + msgid
-		: "seq:" + String(++fcMsgSeq) + "|" + time + "|" + (id || "") + "|" + type;
+	const replyPreview = isPending ? null : extractReplyPreview(div);
+	const nonce = isPending ? div.getAttribute("data-nonce") : null;
+	/* Prefer Club msgid; pending uses WCE nonce; else monotonic seq for same-second repeats. */
+	const key = isPending && nonce
+		? "pending:" + nonce
+		: msgid
+			? "msgid:" + msgid
+			: "seq:" + String(++fcMsgSeq) + "|" + time + "|" + (id || "") + "|" + type;
 
 	return {
 		type,
@@ -1313,9 +1338,90 @@ function classifyClubDiv(div: HTMLElement): FcMsg | null {
 		direction,
 		targetId,
 		senderId,
-		msgid,
+		msgid: isPending ? null : msgid,
 		replyPreview,
+		pending: isPending || undefined,
+		nonce: nonce || null,
 	};
+}
+
+function removeFloatChatRowByKey(key: string) {
+	if (!key) return;
+	const log = $("fbm-fc-log");
+	if (!log) return;
+	const kids = log.children;
+	for (let i = kids.length - 1; i >= 0; i--) {
+		const el = kids[i] as HTMLElement;
+		if (el.getAttribute("data-key") === key) {
+			log.removeChild(el);
+		}
+	}
+}
+
+function clearPendingNonce(nonce: string | null | undefined) {
+	if (!nonce) return;
+	const track = pendingByNonce.get(nonce);
+	if (!track) return;
+	if (track.timer != null) {
+		clearTimeout(track.timer);
+		track.timer = null;
+	}
+	if (track.shown) removeFloatChatRowByKey(track.msg.key);
+	pendingByNonce.delete(nonce);
+}
+
+function clearPendingMatching(m: FcMsg) {
+	if (!m || m.pending) return;
+	const selfMn = selfMemberId();
+	if (!selfMn || (m.senderId || m.id) !== selfMn) return;
+	const body = String(m.body || "");
+	const type = m.type;
+	/* Clear only the oldest match so identical rapid sends keep their own pending. */
+	let matchNonce: string | null = null;
+	pendingByNonce.forEach(function (track, nonce) {
+		if (matchNonce) return;
+		if (track.msg.type === type && String(track.msg.body || "") === body) {
+			matchNonce = nonce;
+		}
+	});
+	if (matchNonce) clearPendingNonce(matchNonce);
+}
+
+function scheduleWcePending(m: FcMsg) {
+	const nonce = m.nonce;
+	if (!nonce) return;
+	clearPendingNonce(nonce);
+	const track: PendingTrack = { nonce, timer: null, msg: m, shown: false };
+	pendingByNonce.set(nonce, track);
+	track.timer = setTimeout(function () {
+		track.timer = null;
+		if (!pendingByNonce.has(nonce)) return;
+		/* Club may already have removed the pending line (fast ack after schedule). */
+		let still = false;
+		if (typeof document !== "undefined") {
+			const club = document.getElementById("TextAreaChatLog");
+			const kids = club ? club.querySelectorAll(".bce-pending") : [];
+			for (let i = 0; i < kids.length; i++) {
+				if ((kids[i] as HTMLElement).getAttribute("data-nonce") === nonce) {
+					still = true;
+					break;
+				}
+			}
+		}
+		if (!still) {
+			pendingByNonce.delete(nonce);
+			return;
+		}
+		track.shown = true;
+		FBM.appendFloatChatMsg(m);
+	}, PENDING_LAG_MS);
+}
+
+function clearAllPendingTracks() {
+	pendingByNonce.forEach(function (_track, nonce) {
+		clearPendingNonce(nonce);
+	});
+	pendingByNonce.clear();
 }
 
 function renderBodyInto(body: HTMLElement, m: FcMsg, wasAtEnd: boolean) {
@@ -1823,6 +1929,7 @@ function renderMsgRow(m: FcMsg): HTMLElement {
 	const row = document.createElement("article");
 	row.className = "fbm-fc-msg fbm-fc-msg-" + m.type;
 	if (m.direction) row.classList.add("fbm-fc-msg-dir-" + m.direction);
+	if (m.pending) row.classList.add("fbm-fc-msg-pending");
 	row.dataset.key = m.key;
 	row.setAttribute("data-fc-body", m.body || "");
 	const issuerId = m.senderId || m.id;
@@ -1831,7 +1938,8 @@ function renderMsgRow(m: FcMsg): HTMLElement {
 	if (partnerId) row.setAttribute("data-fc-partner", partnerId);
 	if (m.color) row.setAttribute("data-fc-color", m.color);
 	if (m.msgid) row.setAttribute("data-fc-msgid", m.msgid);
-	if (issuerId || partnerId) {
+	if (m.nonce) row.setAttribute("data-fc-nonce", m.nonce);
+	if (!m.pending && (issuerId || partnerId)) {
 		row.addEventListener("contextmenu", function (ev) {
 			openFloatChatContextMenu(ev, m);
 		});
@@ -1893,7 +2001,11 @@ function renderMsgRow(m: FcMsg): HTMLElement {
 	line.appendChild(body);
 	main.appendChild(line);
 
-	if ((m.type === "chat" || m.type === "whisper" || m.type === "beep") && partnerId) {
+	if (
+		!m.pending &&
+		(m.type === "chat" || m.type === "whisper" || m.type === "beep") &&
+		partnerId
+	) {
 		const reply = document.createElement("button");
 		reply.type = "button";
 		reply.className = "fbm-fc-reply-btn";
@@ -1986,6 +2098,12 @@ FBM.mirrorClubChatDiv = function (div: HTMLElement) {
 	const m = classifyClubDiv(div);
 	if (!m) return;
 	mirroredClubDivs.add(div);
+	/* WCE pending: delay paint so fast acks never flash; muted row is a lag cue. */
+	if (m.pending) {
+		scheduleWcePending(m);
+		return;
+	}
+	clearPendingMatching(m);
 	FBM.appendFloatChatMsg(m);
 };
 
@@ -1993,13 +2111,19 @@ FBM.backfillFloatChat = function () {
 	const club = document.getElementById("TextAreaChatLog");
 	const log = $("fbm-fc-log");
 	if (!club || !log) return;
+	clearAllPendingTracks();
 	log.innerHTML = "";
 	const kids = club.children;
 	for (let i = 0; i < kids.length; i++) {
 		const el = kids[i] as HTMLElement;
 		mirroredClubDivs.add(el);
 		const m = classifyClubDiv(el);
-		if (m && !isExactMessageMuted(m)) log.appendChild(renderMsgRow(m));
+		if (!m || isExactMessageMuted(m)) continue;
+		/* Already-visible Club pending means lag is already in progress — show now. */
+		if (m.pending && m.nonce) {
+			pendingByNonce.set(m.nonce, { nonce: m.nonce, timer: null, msg: m, shown: true });
+		}
+		log.appendChild(renderMsgRow(m));
 	}
 	while (log.children.length > LOG_CAP) {
 		log.removeChild(log.firstChild as Node);
@@ -2624,26 +2748,56 @@ FBM.acceptFloatChatAc = function (index?: number) {
 };
 
 FBM.installFloatChatMirror = function () {
-	if (FBM._floatChatMirrorHooked) return;
-	const ok = FBM.tryHook(
-		"floatChatAppend",
-		"ChatRoomAppendChat",
-		2,
-		function (args: unknown[], next: (a?: unknown[]) => unknown) {
-			const ret = next(args);
-			try {
-				const div = args && args[0];
-				if (div && (div as HTMLElement).nodeType === 1) {
-					FBM.mirrorClubChatDiv(div as HTMLElement);
+	if (!FBM._floatChatMirrorHooked) {
+		const ok = FBM.tryHook(
+			"floatChatAppend",
+			"ChatRoomAppendChat",
+			2,
+			function (args: unknown[], next: (a?: unknown[]) => unknown) {
+				const ret = next(args);
+				try {
+					const div = args && args[0];
+					if (div && (div as HTMLElement).nodeType === 1) {
+						FBM.mirrorClubChatDiv(div as HTMLElement);
+					}
+				} catch (e) {
+					console.warn("[FBM] float mirror", e);
 				}
-			} catch (e) {
-				console.warn("[FBM] float mirror", e);
+				return ret;
 			}
-			return ret;
-		}
-	);
-	if (ok) FBM._floatChatMirrorHooked = true;
+		);
+		if (ok) FBM._floatChatMirrorHooked = true;
+	}
+	/* Club rebuilds #TextAreaChatLog on join — rebind observer when the node is new. */
+	installFloatChatPendingWatch();
 };
+
+/** Drop float pending rows when WCE removes `.bce-pending` from Club chat. */
+function installFloatChatPendingWatch() {
+	if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+	const bind = function () {
+		const club = document.getElementById("TextAreaChatLog") as FBMMarkedElement | null;
+		if (!club || club._fbmPendingObs) return;
+		const obs = new MutationObserver(function (records) {
+			for (let r = 0; r < records.length; r++) {
+				const removed = records[r].removedNodes;
+				for (let i = 0; i < removed.length; i++) {
+					const node = removed[i];
+					if (!node || node.nodeType !== 1) continue;
+					const el = node as HTMLElement;
+					if (el.classList && el.classList.contains("bce-pending")) {
+						clearPendingNonce(el.getAttribute("data-nonce"));
+					}
+				}
+			}
+		});
+		obs.observe(club, { childList: true });
+		club._fbmPendingObs = true;
+	};
+	bind();
+	setTimeout(bind, 0);
+	setTimeout(bind, 120);
+}
 
 // ===== SECTION: Hotkeys, compose keys, visibility watch, drag/resize =====
 

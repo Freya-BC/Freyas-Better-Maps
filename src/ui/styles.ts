@@ -928,6 +928,19 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
 }
 .fbm-fc-msg-system { background: var(--fbm-fc-system-bg); color: var(--fbm-fc-muted); }
 .fbm-fc-msg-system:nth-child(even) { background: var(--fbm-fc-system-bg); }
+/* WCE pending echo — muted lag cue; replaced by the real line on ack. */
+.fbm-fc-msg-pending {
+	opacity: 0.58;
+	border-left: 3px solid rgba(212, 160, 23, 0.55);
+	color: var(--fbm-fc-muted);
+}
+.fbm-fc-msg-pending .fbm-fc-msg-body,
+.fbm-fc-msg-pending .fbm-fc-msg-name,
+.fbm-fc-msg-pending .fbm-fc-msg-colon {
+	font-style: italic;
+	color: var(--fbm-fc-muted);
+}
+.fbm-fc-msg-pending .fbm-fc-reply-btn { display: none !important; }
 .fbm-fc-msg-beep {
 	background: rgba(61, 184, 160, 0.08);
 	border-left: 3px solid var(--fbm-fc-beep-mode);

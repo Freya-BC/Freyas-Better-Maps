@@ -79,6 +79,7 @@ export type FBMNamespace = Record<string, any>;
 /** DOM nodes that store one-time FBM event bindings. */
 export interface FBMMarkedElement extends HTMLElement {
 	_fbmBound?: boolean;
+	_fbmPendingObs?: boolean;
 }
 
 export const FBM: FBMNamespace = {};
