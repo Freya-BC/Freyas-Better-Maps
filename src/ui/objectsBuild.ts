@@ -49,6 +49,20 @@ function setStatus(msg: string) {
 	if (el) el.textContent = msg || "";
 }
 
+function applyObjectsIconSize(size?: number) {
+	if (!FBM.objectsState) FBM.loadObjectsState();
+	const n = FBM.clampObjectsIconSize(
+		size != null ? size : FBM.objectsState && FBM.objectsState.ui && FBM.objectsState.ui.iconSize
+	);
+	if (FBM.objectsState && FBM.objectsState.ui) FBM.objectsState.ui.iconSize = n;
+	const panel = $("fbm-objects");
+	if (panel) panel.style.setProperty("--fbm-obj-cell-min", n + "px");
+	const slider = document.getElementById("fbm-obj-icon-size") as HTMLInputElement | null;
+	if (slider) slider.value = String(n);
+	const val = $("fbm-obj-icon-size-val");
+	if (val) val.textContent = String(n);
+}
+
 function matchesSearch(text: string) {
 	const q = (FBM._objectsUi.search || "").trim().toLowerCase();
 	if (!q) return true;
@@ -193,6 +207,11 @@ FBM.objectsBuildMarkup = function () {
 		ICONS.load +
 		"</button>" +
 		'<input type="file" id="fbm-obj-load-file" accept="application/json,.json" hidden />' +
+		'<label class="fbm-obj-icon-size" title="Catalog icon size">' +
+		"<span>Icons</span>" +
+		'<input type="range" id="fbm-obj-icon-size" min="48" max="96" step="8" value="96" />' +
+		'<span id="fbm-obj-icon-size-val">96</span>' +
+		"</label>" +
 		"</div>" +
 		'<div class="fbm-obj-body" id="fbm-obj-body">' +
 		'<aside class="fbm-obj-tree" id="fbm-obj-tree"></aside>' +
@@ -526,6 +545,7 @@ FBM.openObjectsBuild = function () {
 		const body = $("fbm-obj-body");
 		if (body && ui.extWidth) body.style.setProperty("--fbm-obj-ext-w", ui.extWidth + "px");
 	}
+	applyObjectsIconSize();
 	FBM.bindObjectsBuildUi();
 	FBM.refreshObjectsBuildUi();
 	setStatus("Objects Build ready.");
@@ -616,6 +636,14 @@ FBM.bindObjectsBuildUi = function () {
 		search.addEventListener("input", function () {
 			FBM._objectsUi.search = search.value || "";
 			FBM.refreshObjectsBuildUi();
+		});
+	}
+	const iconSize = document.getElementById("fbm-obj-icon-size") as HTMLInputElement | null;
+	if (iconSize && !(iconSize as FBMMarkedElement)._fbmBound) {
+		(iconSize as FBMMarkedElement)._fbmBound = true;
+		iconSize.addEventListener("input", function () {
+			applyObjectsIconSize(Number(iconSize.value));
+			FBM.saveObjectsState();
 		});
 	}
 	const single = $("fbm-obj-single");

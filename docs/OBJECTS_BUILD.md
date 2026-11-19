@@ -28,8 +28,10 @@ Use Objects Build when you want a clearer picker than Club’s built-in map tool
 
 - Left tree: **Tiles**, **Objects**, **Effects** categories.
 - Center grid: cards with thumbnails and variant counts.
+- **Icons** slider (action bar) scales catalog / variants thumbs from 48–96px (default 96) so you can fit more items on screen.
 - Search filters the catalog.
 - Pick a category, then a card — Club **Brush** is armed.
+- With a brush armed, a translucent **placement ghost** follows the cursor on tiles where Club allows the item (e.g. doors only on walls). Toggle under Settings → General (on by default).
 
 ![Brush / place mode](../assets/docs/objects-build-brush.png)
 
@@ -47,7 +49,7 @@ Toggle **Single** for one-shot place instead of continuous brush.
 | Single | One-shot place |
 | Clear | Clear drawing selection (Esc) |
 
-Category order, custom variants, recent items, and window size persist in **localStorage**.
+Category order, custom variants, recent items, window size, and icon size persist in **localStorage**.
 
 ---
 

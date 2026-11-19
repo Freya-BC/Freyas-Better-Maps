@@ -40,6 +40,7 @@ FBM.refreshSettingsUi = function () {
 	set("fbm-building", s.buildingTools);
 	set("fbm-invisible-walls", !!s.showInvisibleWalls);
 	set("fbm-copy-objset", s.copyObjectSettings !== false);
+	set("fbm-placement-ghost", s.placementGhost !== false);
 	set("fbm-blindfold", s.fullBlindfold);
 	set("fbm-whisper", s.hearingWhisper);
 	set("fbm-zoom", s.fullZoomOut);
@@ -140,6 +141,7 @@ FBM.bindSettingsUi = function () {
 	bindToggle("fbm-building", "buildingTools");
 	bindToggle("fbm-invisible-walls", "showInvisibleWalls");
 	bindToggle("fbm-copy-objset", "copyObjectSettings");
+	bindToggle("fbm-placement-ghost", "placementGhost");
 	bindToggle("fbm-blindfold", "fullBlindfold", function () {
 		const styleSel = selectEl("fbm-blindfold-style");
 		if (styleSel) styleSel.disabled = !FBM.settings.fullBlindfold;

@@ -1,4 +1,4 @@
-/* Freyas Better Maps v1.0.10 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Freyas Better Maps v1.0.20 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__FreyasBetterMapsPageLoaded) return;
@@ -10,7 +10,7 @@
   window.FBM = FBM;
 
   // src/defaults.ts
-  FBM.VERSION = "1.0.10";
+  FBM.VERSION = "1.0.20";
   FBM.FULL_NAME = "Freyas Better Maps";
   FBM.EXTENSION_KEY = "FreyasBetterMaps";
   FBM.EXTENSION_KEY_MAPS = "FreyasBetterMapsMaps";
@@ -19,7 +19,7 @@
   FBM.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Better-Maps/freyas-better-maps.js";
   FBM.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Better-Maps/loader.js";
   FBM.DOCS_URL = "https://freya-bc.github.io/Freyas-Better-Maps/";
-  FBM.CHANGELOG_ID = "r134-major";
+  FBM.CHANGELOG_ID = "obj-icons-ghost";
   FBM.LZ_PREFIX = "FBMLz1:";
   FBM.LZ_FORMAT = "FBMLz";
   FBM.LZ_MIN = 800;
@@ -50,6 +50,8 @@
     gridOn: false,
     showInvisibleWalls: false,
     copyObjectSettings: true,
+    /** Objects Build hover ghost while brush is armed (valid cells only). */
+    placementGhost: true,
     buildBarHotkey: "Alt+B",
     ui: {
       left: null,
@@ -232,6 +234,7 @@
     out.gridOn = !!s.gridOn;
     out.showInvisibleWalls = !!s.showInvisibleWalls;
     out.copyObjectSettings = s.copyObjectSettings !== false;
+    out.placementGhost = s.placementGhost !== false;
     out.buildBarHotkey = typeof s.buildBarHotkey === "string" && s.buildBarHotkey.trim() ? s.buildBarHotkey.trim() : d.buildBarHotkey || "Alt+B";
     out.ui = Object.assign({}, d.ui, s.ui && typeof s.ui === "object" ? s.ui : {});
     {
@@ -2449,8 +2452,17 @@
       width: 900,
       height: 560,
       extWidth: 260,
+      /** Catalog / variants grid cell min size (px). 48–96. */
+      iconSize: 96,
       collapsedSections: {}
     }
+  };
+  FBM.clampObjectsIconSize = function(n) {
+    let v = Math.round(Number(n));
+    if (!isFinite(v)) v = 96;
+    if (v < 48) v = 48;
+    if (v > 96) v = 96;
+    return Math.round(v / 8) * 8;
   };
   FBM.loadObjectsState = function() {
     let data = null;
@@ -2461,12 +2473,14 @@
     }
     const d = FBM.DEFAULT_OBJECTS_STATE;
     const s = data && typeof data === "object" ? data : {};
+    const ui = Object.assign({}, d.ui, s.ui && typeof s.ui === "object" ? s.ui : {});
+    ui.iconSize = FBM.clampObjectsIconSize(ui.iconSize != null ? ui.iconSize : d.ui.iconSize);
     FBM.objectsState = {
       categoryOrder: s.categoryOrder && typeof s.categoryOrder === "object" ? s.categoryOrder : {},
       customVariants: s.customVariants && typeof s.customVariants === "object" ? s.customVariants : {},
       recent: Array.isArray(s.recent) ? s.recent.slice(0, 20) : [],
       singlePlace: !!s.singlePlace,
-      ui: Object.assign({}, d.ui, s.ui && typeof s.ui === "object" ? s.ui : {})
+      ui
     };
     return FBM.objectsState;
   };
@@ -2894,6 +2908,75 @@
     wrapped._fbmLabel = label;
     return wrapped;
   }
+  FBM.objectsDrawPlacementGhost = function(Left, Top, Width, Height) {
+    if (!FBM.settings || FBM.settings.placementGhost === false) return;
+    const paint = FBM._objectsPaint;
+    if (!paint || !paint.armed || paint.pipet || paint.clubId == null) return;
+    if (FBM._copy && FBM._copy.mode) return;
+    if (FBM.mapIsAdmin && !FBM.mapIsAdmin()) return;
+    if (!FBM.mapTileFromMouse || !FBM.mapScreenFromTile || !FBM.drawMapCellGhost) return;
+    const hover = FBM.mapTileFromMouse(MouseX, MouseY, Left, Top, Width, Height);
+    if (!hover) return;
+    const doodad = resolveDoodad(paint.kind, paint.clubId);
+    if (!doodad) return;
+    const map = mapApi3();
+    const mw = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
+    const mh = typeof ChatRoomMapViewHeight === "number" ? ChatRoomMapViewHeight : 40;
+    if (hover.X < 0 || hover.Y < 0 || hover.X >= mw || hover.Y >= mh) return;
+    let ok = true;
+    try {
+      if (paint.kind === "tile") {
+        ok = map && typeof map.canSetTile === "function" ? !!map.canSetTile(hover.X, hover.Y, doodad) : true;
+      } else if (paint.kind === "object") {
+        ok = map && typeof map.canSetObject === "function" ? !!map.canSetObject(hover.X, hover.Y, doodad) : true;
+      } else if (paint.kind === "effect") {
+        ok = true;
+      } else {
+        return;
+      }
+    } catch (e) {
+      return;
+    }
+    if (!ok) return;
+    const s = FBM.mapScreenFromTile(hover.X, hover.Y, Left, Top, Width, Height);
+    if (s.Left + s.TileWidth < Left || s.Top + s.TileHeight < Top) return;
+    if (s.Left > Left + Width || s.Top > Top + Height) return;
+    const ch = String.fromCharCode(paint.clubId);
+    let tileCh = null;
+    let objectCh = null;
+    let settings = null;
+    let useSettings = false;
+    if (paint.kind === "tile") {
+      tileCh = ch;
+    } else if (paint.kind === "object") {
+      objectCh = ch;
+      const st = paint.settings;
+      if (st) {
+        settings = {
+          Rotation: st.rotation != null ? st.rotation : 0,
+          Size: st.size != null ? st.size : 100,
+          Colors: Array.isArray(st.colors) ? st.colors : []
+        };
+        useSettings = true;
+      }
+    } else {
+      if (typeof DrawRect === "function") {
+        DrawRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "rgba(91,192,222,0.28)");
+      }
+      if (typeof DrawEmptyRect === "function") {
+        DrawEmptyRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "#5bc0de", 2);
+      }
+      return;
+    }
+    const r = FBM.drawMapCellGhost(null, tileCh, objectCh, settings, s, {
+      alpha: 0.4,
+      useSettings
+    });
+    const drew = !!(r && (r.drewTile || r.drewObject));
+    if (!drew && typeof DrawRect === "function") {
+      DrawRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "rgba(91,192,222,0.28)");
+    }
+  };
   FBM.installObjectsPaintHook = function() {
     if (typeof ChatRoomMapViewTools !== "undefined" && ChatRoomMapViewTools && ChatRoomMapViewTools.Brush) {
       const brush = ChatRoomMapViewTools.Brush;
@@ -3123,6 +3206,7 @@
   FBM.mapDrawGridOverlay = function(Left, Top, Width, Height) {
     const m = FBM.mapBag();
     if (!m.buildingTools || !m.gridOn) return;
+    if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) return;
     if (!Player || !Player.MapData || !Player.MapData.Pos) return;
     if (typeof DrawEmptyRect !== "function" && typeof DrawRect !== "function") return;
     const layout = FBM.mapTileLayout(Left, Top, Width, Height);
@@ -3631,6 +3715,9 @@
       run("copyHighlight", function() {
         if (FBM.copyDrawHighlight) FBM.copyDrawHighlight(Left, Top, Width, Height);
       });
+      run("placementGhost", function() {
+        if (FBM.objectsDrawPlacementGhost) FBM.objectsDrawPlacementGhost(Left, Top, Width, Height);
+      });
       run("typing", function() {
         if (FBM.mapDrawTypingIndicators) FBM.mapDrawTypingIndicators(Left, Top, Width, Height);
       });
@@ -4015,6 +4102,7 @@ body.fbm-hide-arrow-keys #chat-room-map-controls,
 .fbm-about-steps li { margin: 3px 0; }
 
 .fbm-objects {
+	--fbm-obj-cell-min: 96px;
 	position: fixed; z-index: 121; top: 96px; left: 50%; transform: translateX(-50%);
 	width: min(900px, calc(100vw - 32px)); height: min(560px, calc(100vh - 120px));
 	min-width: 640px; min-height: 420px; display: flex; flex-direction: column;
@@ -4092,9 +4180,16 @@ body.fbm-hide-arrow-keys #chat-room-map-controls,
 	padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-weight: 600;
 }
 .fbm-obj-grid-head .fbm-hint { margin: 0; font-weight: 400; }
+.fbm-obj-icon-size {
+	display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+	margin-left: auto; font-size: 11px; color: var(--fbm-muted);
+}
+.fbm-obj-icon-size input[type="range"] {
+	width: 88px; accent-color: var(--fbm-accent); cursor: pointer;
+}
 .fbm-obj-grid {
 	flex: 1; overflow: auto; padding: 10px;
-	display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; align-content: start;
+	display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--fbm-obj-cell-min), 1fr)); gap: 8px; align-content: start;
 	scrollbar-width: thin;
 	scrollbar-color: rgba(212, 160, 23, 0.55) rgba(20, 16, 28, 0.9);
 }
@@ -4122,7 +4217,7 @@ body.fbm-hide-arrow-keys #chat-room-map-controls,
 }
 .fbm-obj-preview-name { font-weight: 600; }
 .fbm-obj-variants {
-	display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 12px;
+	display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--fbm-obj-cell-min), 1fr)); gap: 8px; margin-bottom: 12px;
 }
 .fbm-obj-variant {
 	display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px;
@@ -4951,7 +5046,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     FBM.injectStyles();
     const root = document.createElement("div");
     root.id = "fbm-root";
-    root.innerHTML = '<div class="fbm-build-bar" id="fbm-build-bar"><span class="fbm-bar-grip" id="fbm-bar-grip" title="Drag" aria-label="Drag build bar">\u22EE\u22EE</span><button type="button" class="fbm-btn" id="fbm-bar-grid">Grid</button><button type="button" class="fbm-btn" id="fbm-bar-objects" title="Build \u2014 catalog, brush, variants">Build</button><button type="button" class="fbm-btn" id="fbm-bar-copy">Copy</button><button type="button" class="fbm-btn" id="fbm-bar-objset" title="Include Sign/Tether/Rotation/Size/Color when saving a selection">Obj settings</button><button type="button" class="fbm-btn" id="fbm-bar-save" disabled>Save selection</button><button type="button" class="fbm-btn" id="fbm-bar-paste">Paste\u2026</button><button type="button" class="fbm-btn fbm-bar-star" id="fbm-bar-star" title="SuperPowers" hidden><img id="fbm-bar-star-img" src="Icons/SuperPowersInactive.png" alt="" width="18" height="18" /></button><button type="button" class="fbm-btn" id="fbm-bar-settings">Settings</button><span class="fbm-bar-sync" id="fbm-bar-sync" hidden></span></div><div class="fbm-templates" id="fbm-templates" hidden><div class="fbm-templates-head"><span>Templates</span><button type="button" class="fbm-icon-btn" id="fbm-tpl-close" title="Close">\xD7</button></div><p class="fbm-muted fbm-hint">Select a room, then click the map tile for the top-left paste origin.</p><div class="fbm-tpl-grid" id="fbm-tpl-grid"></div></div>' + (FBM.objectsBuildMarkup ? FBM.objectsBuildMarkup() : "") + (FBM.objectSettingsMarkup ? FBM.objectSettingsMarkup() : "") + (FBM.floatChatMarkup ? FBM.floatChatMarkup() : "") + (FBM.changelogMarkup ? FBM.changelogMarkup() : "") + '<div id="fbm-toast" class="fbm-toast" hidden role="status" aria-live="polite"></div><div class="fbm-panel" id="fbm-panel"><div class="fbm-header" id="fbm-header"><div class="fbm-header-title">Freyas Better Maps <span class="fbm-badge">settings</span></div><button type="button" class="fbm-icon-btn" id="fbm-close" title="Close">\xD7</button></div><div class="fbm-tabs" role="tablist"><button type="button" class="fbm-tab fbm-on" data-tab="general">General</button><button type="button" class="fbm-tab" data-tab="chat">Chat</button><button type="button" class="fbm-tab" data-tab="maps">Map storage</button><button type="button" class="fbm-tab" data-tab="about">About</button></div><div class="fbm-page fbm-on" id="fbm-page-general"><p class="fbm-muted fbm-hint">Local map helpers. Toggles are synced via ExtensionSettings; window positions stay on this device. FBM map typing hides Club\u2019s foot-level Talk icon; if FAM Map typing is also on, bubbles may still double \u2014 turn one off.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-typing" /> <span>Show typing bubbles on the map</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-toolbar" /> <span>Hide Club map toolbar (R132 panel + zoom) behind a small +</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-arrows" /> <span>Hide Arrow Keys (and Club SuperPowers; \u2605 on the FBM build bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-building" /> <span>Allow building tools (FBM button on map bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-invisible-walls" /> <span>Show invisible walls (EmptySpace Impassable red X)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-copy-objset" /> <span>Object settings on copy &amp; paste (Sign, Tether, Rotation, Size, Color)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-blindfold" /> <span>Full blindfold (grey walls; hide your tile)</span></label><div class="fbm-row fbm-indent" id="fbm-blindfold-style-row"><label class="fbm-muted" for="fbm-blindfold-style">Others look like</label><select id="fbm-blindfold-style"><option value="greyscale">Greyscale models</option><option value="silhouette">Generic silhouette</option></select></div><label class="fbm-check-row"><input type="checkbox" id="fbm-whisper" /> <span>Whisper at hearing range (walls apply; not SuperZoom)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max, admin only)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-room-update" /> <span>Hide duplicate \u201Cupdated the room\u201D chat spam</span></label><div class="fbm-row fbm-indent" id="fbm-room-update-cool-row"><label class="fbm-muted" for="fbm-room-update-cool">Cooldown (minutes)</label><input type="number" id="fbm-room-update-cool" min="1" max="120" step="1" value="5" /></div><div class="fbm-section"><div class="fbm-section-head">Build bar hotkey</div><p class="fbm-muted fbm-hint">Toggles the floating build bar when the map is active (admin). Default Alt+B. Also use the FBM button on the left map bar.</p><div class="fbm-row"><input type="text" id="fbm-build-hotkey" placeholder="Alt+B" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-build-hotkey-capture">Capture</button></div></div><div class="fbm-status" id="fbm-status"></div></div><div class="fbm-page" id="fbm-page-chat"><p class="fbm-muted fbm-hint">Floatable Chat for when Club chat is collapsed on the map. Preferences are synced via ExtensionSettings; position and size stay on this device.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-enabled" /> <span>Enable Floatable Chat</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoshow" /> <span>Autoshow when default Club chat is hidden</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoclose" /> <span>Autoclose chat joining a room</span></label><div class="fbm-section"><div class="fbm-section-head">Hotkey</div><div class="fbm-row"><input type="text" id="fbm-fc-hotkey" placeholder="Alt+C" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-fc-hotkey-capture">Capture</button></div></div><div class="fbm-section"><div class="fbm-section-head">Typography</div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-size">Text size</label><input type="range" id="fbm-fc-size" min="11" max="18" step="1" value="13" /><span class="fbm-muted" id="fbm-fc-size-val">13px</span></div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-transparency">Transparency</label><input type="range" id="fbm-fc-transparency" min="0" max="60" step="1" value="15" /><span class="fbm-muted" id="fbm-fc-transparency-val">15%</span></div><p class="fbm-muted fbm-hint">0% is solid Seidr chrome; higher values let the map show through.</p><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-font">Font</label><select id="fbm-fc-font" class="fbm-fc-font-select"></select></div><div class="fbm-row" id="fbm-fc-font-custom-row" hidden><label class="fbm-muted" for="fbm-fc-font-custom">Custom font</label><input type="text" id="fbm-fc-font-custom" placeholder="e.g. Comic Code" maxlength="80" /></div><p class="fbm-muted fbm-hint">Type in the dropdown to jump. Choose Custom\u2026 to enter any installed family.</p></div><div class="fbm-section"><div class="fbm-section-head">Style</div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-style">Theme</label><select id="fbm-fc-style"><option value="dark">Dark (Seidr)</option><option value="light">Light Seidr</option><option value="custom">Custom CSS</option></select></div><div id="fbm-fc-custom-wrap" hidden><p class="fbm-muted fbm-hint">CSS applied to <code>#fbm-float-chat</code>.</p><textarea id="fbm-fc-css" class="fbm-fc-css" spellcheck="false" rows="8"></textarea><div class="fbm-row"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-fc-css-apply">Apply</button><button type="button" class="fbm-btn" id="fbm-fc-css-reset">Reset to Dark</button></div></div></div><div class="fbm-section"><div class="fbm-section-head">Highlights</div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-own" /> <span>Highlight own names / words in messages</span></label><div class="fbm-indent" id="fbm-fc-hl-own-opts"><p class="fbm-muted fbm-hint">One name or word per line (or comma-separated). Defaults to your Club name. Matches in message text are highlighted.</p><textarea id="fbm-fc-own-names" class="fbm-fc-own-names" rows="4" spellcheck="false" placeholder=""></textarea><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-seidr" /> <span>Use Seidr highlight color</span></label><div class="fbm-row" id="fbm-fc-hl-color-row"><label class="fbm-muted" for="fbm-fc-hl-color">Color</label><input type="color" id="fbm-fc-hl-color" value="#d4a017" /></div></div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-others" /> <span>Highlight other users\u2019 names in message text (Seidr color)</span></label><p class="fbm-muted fbm-hint">Does not change the sender name color \u2014 only mentions inside the message body.</p></div><div class="fbm-section"><div class="fbm-section-head">Compose extras</div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-whisper-avatar" /> <span>Whisper avatar beside input</span></label><p class="fbm-muted fbm-hint">When whispering, show a small face crop of the target next to the float compose field (FCM-style).</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-map-compass" /> <span>Map compass (Members / chat name hover)</span></label><p class="fbm-muted fbm-hint">On map view, hover a Members name (or float-chat name): animated arrow above a visible player, or edge direction if fogged / out of range.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-confirm-leave" /> <span>Confirm before Leave</span></label><p class="fbm-muted fbm-hint">Shows a confirm dialog when using the float chat Leave button.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-ooc-protect" /> <span>OOC Protection</span></label><p class="fbm-muted fbm-hint">Refuse send when parentheses in the message body are unbalanced (broken OOC / whisper / beep).</p></div><div class="fbm-section" id="fbm-trusted-hosts"><div class="fbm-section-head">Trusted image hosts</div><p class="fbm-muted fbm-hint">Permanent hosts for Floatable Chat image embeds. Session trusts clear on relog. Some CDNs (cdn.discordapp.com, i.imgur.com, Tenor, \u2026) are built-in; others ask in chat.</p><div class="fbm-map-list" id="fbm-trusted-host-list"></div><p class="fbm-muted fbm-hint" id="fbm-trusted-host-empty" hidden>No permanent hosts yet.</p></div><div class="fbm-row"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-fc-open">Show float chat</button></div></div><div class="fbm-page" id="fbm-page-maps"><p class="fbm-muted fbm-hint">Save uses Club map export (/mapcopy). Load requires admin (/mappaste). Limit 10 maps + 1 autosave (autosave is kept on this device only).</p><div class="fbm-section"><div class="fbm-section-head">Save current map</div><div class="fbm-row"><input type="text" id="fbm-map-name" placeholder="Map name" maxlength="48" /><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-map-save">Save</button></div></div><div class="fbm-section"><div class="fbm-section-head">Load</div><div class="fbm-map-list" id="fbm-map-list"></div></div><div class="fbm-section"><div class="fbm-section-head">Autosave</div><p class="fbm-muted fbm-hint">After you edit the map, autosaves at most once per 60 seconds.</p><div class="fbm-map-item"><span id="fbm-autosave-label">Autosave \u2014 empty</span><button type="button" class="fbm-btn" id="fbm-autosave-load" disabled>Load</button></div></div></div><div class="fbm-page" id="fbm-page-about"><p class="fbm-muted fbm-hint">Version <span id="fbm-about-ver"></span>. Developed by Freya (245450).</p><p class="fbm-muted fbm-hint">Open via Preference \u2192 Extensions \u2192 Freyas Better Maps, or the build bar <strong>Settings</strong> button.</p><div class="fbm-row" style="margin-bottom:10px"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-about-changelog">What\u2019s new</button><a class="fbm-btn" id="fbm-about-docs" href="#" target="_blank" rel="noopener noreferrer">Documentation</a></div><p class="fbm-muted fbm-hint">Expand a feature below for a short description and how to use it.</p><div class="fbm-about-feats">' + aboutFeat(
+    root.innerHTML = '<div class="fbm-build-bar" id="fbm-build-bar"><span class="fbm-bar-grip" id="fbm-bar-grip" title="Drag" aria-label="Drag build bar">\u22EE\u22EE</span><button type="button" class="fbm-btn" id="fbm-bar-grid">Grid</button><button type="button" class="fbm-btn" id="fbm-bar-objects" title="Build \u2014 catalog, brush, variants">Build</button><button type="button" class="fbm-btn" id="fbm-bar-copy">Copy</button><button type="button" class="fbm-btn" id="fbm-bar-objset" title="Include Sign/Tether/Rotation/Size/Color when saving a selection">Obj settings</button><button type="button" class="fbm-btn" id="fbm-bar-save" disabled>Save selection</button><button type="button" class="fbm-btn" id="fbm-bar-paste">Paste\u2026</button><button type="button" class="fbm-btn fbm-bar-star" id="fbm-bar-star" title="SuperPowers" hidden><img id="fbm-bar-star-img" src="Icons/SuperPowersInactive.png" alt="" width="18" height="18" /></button><button type="button" class="fbm-btn" id="fbm-bar-settings">Settings</button><span class="fbm-bar-sync" id="fbm-bar-sync" hidden></span></div><div class="fbm-templates" id="fbm-templates" hidden><div class="fbm-templates-head"><span>Templates</span><button type="button" class="fbm-icon-btn" id="fbm-tpl-close" title="Close">\xD7</button></div><p class="fbm-muted fbm-hint">Select a room, then click the map tile for the top-left paste origin.</p><div class="fbm-tpl-grid" id="fbm-tpl-grid"></div></div>' + (FBM.objectsBuildMarkup ? FBM.objectsBuildMarkup() : "") + (FBM.objectSettingsMarkup ? FBM.objectSettingsMarkup() : "") + (FBM.floatChatMarkup ? FBM.floatChatMarkup() : "") + (FBM.changelogMarkup ? FBM.changelogMarkup() : "") + '<div id="fbm-toast" class="fbm-toast" hidden role="status" aria-live="polite"></div><div class="fbm-panel" id="fbm-panel"><div class="fbm-header" id="fbm-header"><div class="fbm-header-title">Freyas Better Maps <span class="fbm-badge">settings</span></div><button type="button" class="fbm-icon-btn" id="fbm-close" title="Close">\xD7</button></div><div class="fbm-tabs" role="tablist"><button type="button" class="fbm-tab fbm-on" data-tab="general">General</button><button type="button" class="fbm-tab" data-tab="chat">Chat</button><button type="button" class="fbm-tab" data-tab="maps">Map storage</button><button type="button" class="fbm-tab" data-tab="about">About</button></div><div class="fbm-page fbm-on" id="fbm-page-general"><p class="fbm-muted fbm-hint">Local map helpers. Toggles are synced via ExtensionSettings; window positions stay on this device. FBM map typing hides Club\u2019s foot-level Talk icon; if FAM Map typing is also on, bubbles may still double \u2014 turn one off.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-typing" /> <span>Show typing bubbles on the map</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-toolbar" /> <span>Hide Club map toolbar (R132 panel + zoom) behind a small +</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-arrows" /> <span>Hide Arrow Keys (and Club SuperPowers; \u2605 on the FBM build bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-building" /> <span>Allow building tools (FBM button on map bar)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-invisible-walls" /> <span>Show invisible walls (EmptySpace Impassable red X)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-copy-objset" /> <span>Object settings on copy &amp; paste (Sign, Tether, Rotation, Size, Color)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-placement-ghost" /> <span>Show placement ghost while building (only on valid tiles)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-blindfold" /> <span>Full blindfold (grey walls; hide your tile)</span></label><div class="fbm-row fbm-indent" id="fbm-blindfold-style-row"><label class="fbm-muted" for="fbm-blindfold-style">Others look like</label><select id="fbm-blindfold-style"><option value="greyscale">Greyscale models</option><option value="silhouette">Generic silhouette</option></select></div><label class="fbm-check-row"><input type="checkbox" id="fbm-whisper" /> <span>Whisper at hearing range (walls apply; not SuperZoom)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-zoom" /> <span>Full map zoom-out (raise zoom max, admin only)</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-hide-room-update" /> <span>Hide duplicate \u201Cupdated the room\u201D chat spam</span></label><div class="fbm-row fbm-indent" id="fbm-room-update-cool-row"><label class="fbm-muted" for="fbm-room-update-cool">Cooldown (minutes)</label><input type="number" id="fbm-room-update-cool" min="1" max="120" step="1" value="5" /></div><div class="fbm-section"><div class="fbm-section-head">Build bar hotkey</div><p class="fbm-muted fbm-hint">Toggles the floating build bar when the map is active (admin). Default Alt+B. Also use the FBM button on the left map bar.</p><div class="fbm-row"><input type="text" id="fbm-build-hotkey" placeholder="Alt+B" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-build-hotkey-capture">Capture</button></div></div><div class="fbm-status" id="fbm-status"></div></div><div class="fbm-page" id="fbm-page-chat"><p class="fbm-muted fbm-hint">Floatable Chat for when Club chat is collapsed on the map. Preferences are synced via ExtensionSettings; position and size stay on this device.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-enabled" /> <span>Enable Floatable Chat</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoshow" /> <span>Autoshow when default Club chat is hidden</span></label><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoclose" /> <span>Autoclose chat joining a MAP room</span></label><div class="fbm-section"><div class="fbm-section-head">Hotkey</div><div class="fbm-row"><input type="text" id="fbm-fc-hotkey" placeholder="Alt+C" maxlength="32" /><button type="button" class="fbm-btn" id="fbm-fc-hotkey-capture">Capture</button></div></div><div class="fbm-section"><div class="fbm-section-head">Typography</div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-size">Text size</label><input type="range" id="fbm-fc-size" min="11" max="18" step="1" value="13" /><span class="fbm-muted" id="fbm-fc-size-val">13px</span></div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-transparency">Transparency</label><input type="range" id="fbm-fc-transparency" min="0" max="60" step="1" value="15" /><span class="fbm-muted" id="fbm-fc-transparency-val">15%</span></div><p class="fbm-muted fbm-hint">0% is solid Seidr chrome; higher values let the map show through.</p><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-font">Font</label><select id="fbm-fc-font" class="fbm-fc-font-select"></select></div><div class="fbm-row" id="fbm-fc-font-custom-row" hidden><label class="fbm-muted" for="fbm-fc-font-custom">Custom font</label><input type="text" id="fbm-fc-font-custom" placeholder="e.g. Comic Code" maxlength="80" /></div><p class="fbm-muted fbm-hint">Type in the dropdown to jump. Choose Custom\u2026 to enter any installed family.</p></div><div class="fbm-section"><div class="fbm-section-head">Style</div><div class="fbm-row"><label class="fbm-muted" for="fbm-fc-style">Theme</label><select id="fbm-fc-style"><option value="dark">Dark (Seidr)</option><option value="light">Light Seidr</option><option value="custom">Custom CSS</option></select></div><div id="fbm-fc-custom-wrap" hidden><p class="fbm-muted fbm-hint">CSS applied to <code>#fbm-float-chat</code>.</p><textarea id="fbm-fc-css" class="fbm-fc-css" spellcheck="false" rows="8"></textarea><div class="fbm-row"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-fc-css-apply">Apply</button><button type="button" class="fbm-btn" id="fbm-fc-css-reset">Reset to Dark</button></div></div></div><div class="fbm-section"><div class="fbm-section-head">Highlights</div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-own" /> <span>Highlight own names / words in messages</span></label><div class="fbm-indent" id="fbm-fc-hl-own-opts"><p class="fbm-muted fbm-hint">One name or word per line (or comma-separated). Defaults to your Club name. Matches in message text are highlighted.</p><textarea id="fbm-fc-own-names" class="fbm-fc-own-names" rows="4" spellcheck="false" placeholder=""></textarea><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-seidr" /> <span>Use Seidr highlight color</span></label><div class="fbm-row" id="fbm-fc-hl-color-row"><label class="fbm-muted" for="fbm-fc-hl-color">Color</label><input type="color" id="fbm-fc-hl-color" value="#d4a017" /></div></div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-hl-others" /> <span>Highlight other users\u2019 names in message text (Seidr color)</span></label><p class="fbm-muted fbm-hint">Does not change the sender name color \u2014 only mentions inside the message body.</p></div><div class="fbm-section"><div class="fbm-section-head">Compose extras</div><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-whisper-avatar" /> <span>Whisper avatar beside input</span></label><p class="fbm-muted fbm-hint">When whispering, show a small face crop of the target next to the float compose field (FCM-style).</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-map-compass" /> <span>Map compass (Members / chat name hover)</span></label><p class="fbm-muted fbm-hint">On map view, hover a Members name (or float-chat name): animated arrow above a visible player, or edge direction if fogged / out of range.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-confirm-leave" /> <span>Confirm before Leave</span></label><p class="fbm-muted fbm-hint">Shows a confirm dialog when using the float chat Leave button.</p><label class="fbm-check-row"><input type="checkbox" id="fbm-fc-ooc-protect" /> <span>OOC Protection</span></label><p class="fbm-muted fbm-hint">Refuse send when parentheses in the message body are unbalanced (broken OOC / whisper / beep).</p></div><div class="fbm-section" id="fbm-trusted-hosts"><div class="fbm-section-head">Trusted image hosts</div><p class="fbm-muted fbm-hint">Permanent hosts for Floatable Chat image embeds. Session trusts clear on relog. Some CDNs (cdn.discordapp.com, i.imgur.com, Tenor, \u2026) are built-in; others ask in chat.</p><div class="fbm-map-list" id="fbm-trusted-host-list"></div><p class="fbm-muted fbm-hint" id="fbm-trusted-host-empty" hidden>No permanent hosts yet.</p></div><div class="fbm-row"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-fc-open">Show float chat</button></div></div><div class="fbm-page" id="fbm-page-maps"><p class="fbm-muted fbm-hint">Save uses Club map export (/mapcopy). Load requires admin (/mappaste). Limit 10 maps + 1 autosave (autosave is kept on this device only).</p><div class="fbm-section"><div class="fbm-section-head">Save current map</div><div class="fbm-row"><input type="text" id="fbm-map-name" placeholder="Map name" maxlength="48" /><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-map-save">Save</button></div></div><div class="fbm-section"><div class="fbm-section-head">Load</div><div class="fbm-map-list" id="fbm-map-list"></div></div><div class="fbm-section"><div class="fbm-section-head">Autosave</div><p class="fbm-muted fbm-hint">After you edit the map, autosaves at most once per 60 seconds.</p><div class="fbm-map-item"><span id="fbm-autosave-label">Autosave \u2014 empty</span><button type="button" class="fbm-btn" id="fbm-autosave-load" disabled>Load</button></div></div></div><div class="fbm-page" id="fbm-page-about"><p class="fbm-muted fbm-hint">Version <span id="fbm-about-ver"></span>. Developed by Freya (245450).</p><p class="fbm-muted fbm-hint">Open via Preference \u2192 Extensions \u2192 Freyas Better Maps, or the build bar <strong>Settings</strong> button.</p><div class="fbm-row" style="margin-bottom:10px"><button type="button" class="fbm-btn fbm-btn-accent" id="fbm-about-changelog">What\u2019s new</button><a class="fbm-btn" id="fbm-about-docs" href="#" target="_blank" rel="noopener noreferrer">Documentation</a></div><p class="fbm-muted fbm-hint">Expand a feature below for a short description and how to use it.</p><div class="fbm-about-feats">' + aboutFeat(
       "Typing bubbles",
       "Shows a readable Talk bubble above characters who are typing on the map. Scales with zoom.",
       [
@@ -5061,7 +5156,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       [
         "Open Settings \u2192 <strong>Chat</strong> (or hotkey, default <strong>Alt+C</strong>).",
         "Enable <strong>Autoshow when default Club chat is hidden</strong> to pop the panel when the map chat is collapsed.",
-        "<strong>Autoclose chat joining a room</strong> collapses Club chat on join (toast warns if Autoshow is off).",
+        "<strong>Autoclose chat joining a MAP room</strong> collapses Club chat on join in Always-map rooms only \u2014 not Hybrid or normal (toast warns if Autoshow is off).",
         "Type <code>/</code> for Club command tags. Send copies into Club\u2019s InputChat so emotes, whispers, and registered commands still work.",
         "Whispers/beeps show <strong>from/to</strong> labels. Hover <strong>\u21A9</strong> to reply (including your own messages). Cancel with the red \xD7.",
         "Click a name to copy the ID and prep <code>/whisper id</code>. Compose border turns purple for whisper and teal for beep.",
@@ -5198,6 +5293,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     set("fbm-building", s.buildingTools);
     set("fbm-invisible-walls", !!s.showInvisibleWalls);
     set("fbm-copy-objset", s.copyObjectSettings !== false);
+    set("fbm-placement-ghost", s.placementGhost !== false);
     set("fbm-blindfold", s.fullBlindfold);
     set("fbm-whisper", s.hearingWhisper);
     set("fbm-zoom", s.fullZoomOut);
@@ -5293,6 +5389,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     bindToggle("fbm-building", "buildingTools");
     bindToggle("fbm-invisible-walls", "showInvisibleWalls");
     bindToggle("fbm-copy-objset", "copyObjectSettings");
+    bindToggle("fbm-placement-ghost", "placementGhost");
     bindToggle("fbm-blindfold", "fullBlindfold", function() {
       const styleSel2 = selectEl("fbm-blindfold-style");
       if (styleSel2) styleSel2.disabled = !FBM.settings.fullBlindfold;
@@ -5892,6 +5989,19 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     const el = $4("fbm-obj-status");
     if (el) el.textContent = msg || "";
   }
+  function applyObjectsIconSize(size) {
+    if (!FBM.objectsState) FBM.loadObjectsState();
+    const n = FBM.clampObjectsIconSize(
+      size != null ? size : FBM.objectsState && FBM.objectsState.ui && FBM.objectsState.ui.iconSize
+    );
+    if (FBM.objectsState && FBM.objectsState.ui) FBM.objectsState.ui.iconSize = n;
+    const panel = $4("fbm-objects");
+    if (panel) panel.style.setProperty("--fbm-obj-cell-min", n + "px");
+    const slider = document.getElementById("fbm-obj-icon-size");
+    if (slider) slider.value = String(n);
+    const val = $4("fbm-obj-icon-size-val");
+    if (val) val.textContent = String(n);
+  }
   function matchesSearch(text) {
     const q = (FBM._objectsUi.search || "").trim().toLowerCase();
     if (!q) return true;
@@ -5977,7 +6087,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     );
   };
   FBM.objectsBuildMarkup = function() {
-    return '<div class="fbm-objects" id="fbm-objects" hidden><div class="fbm-header" id="fbm-obj-header"><div class="fbm-header-title">Objects Build <span class="fbm-badge">beta</span></div><button type="button" class="fbm-icon-btn" id="fbm-obj-close" title="Close">\xD7</button></div><div class="fbm-obj-actionbar"><input type="search" id="fbm-obj-search" class="fbm-obj-search" placeholder="Search\u2026" autocomplete="off" /><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-pipet" title="Pipet">' + ICONS.pipet + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-eraser" title="Eraser">' + ICONS.eraser + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-settings-tool" title="Object settings (FBM)">' + ICONS.gear + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-fog" title="Fog">' + ICONS.fog + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-undo" title="Undo">' + ICONS.undo + '</button><span class="fbm-obj-action-sep"></span><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-single" title="Single place">' + ICONS.single + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool fbm-obj-clear" id="fbm-obj-clear" title="Clear drawing selection (Esc)">' + ICONS.clear + '</button><span class="fbm-obj-action-sep"></span><button type="button" class="fbm-icon-btn" id="fbm-obj-save-cat" title="Export catalog JSON">' + ICONS.save + '</button><button type="button" class="fbm-icon-btn" id="fbm-obj-load-cat" title="Import catalog JSON">' + ICONS.load + '</button><input type="file" id="fbm-obj-load-file" accept="application/json,.json" hidden /></div><div class="fbm-obj-body" id="fbm-obj-body"><aside class="fbm-obj-tree" id="fbm-obj-tree"></aside><section class="fbm-obj-grid-wrap"><div class="fbm-obj-grid-head"><span id="fbm-obj-grid-title">Select a category</span><span class="fbm-muted fbm-hint" id="fbm-obj-brush-label"></span></div><div class="fbm-obj-grid" id="fbm-obj-grid"></div></section><div class="fbm-obj-splitter" id="fbm-obj-splitter" title="Resize detail"></div><aside class="fbm-obj-ext" id="fbm-obj-ext"><p class="fbm-muted fbm-hint" id="fbm-obj-ext-empty">Select an item to see variants.</p><div id="fbm-obj-ext-body" hidden><div class="fbm-obj-preview"><div class="fbm-obj-preview-swatch" id="fbm-obj-preview-swatch"></div><div class="fbm-obj-preview-text"><div class="fbm-obj-preview-name" id="fbm-obj-preview-name"></div><div class="fbm-muted fbm-hint" id="fbm-obj-preview-meta"></div></div></div><div class="fbm-section-head">Variants</div><div class="fbm-obj-variants" id="fbm-obj-variants"></div><div class="fbm-row" id="fbm-obj-custom-actions" hidden><button type="button" class="fbm-btn" id="fbm-obj-edit-variant" title="Rename this custom variant">Rename</button><button type="button" class="fbm-btn fbm-btn-danger" id="fbm-obj-del-variant">Delete</button></div></div></aside></div><div class="fbm-obj-recent-wrap"><div class="fbm-obj-recent-label">Recent</div><div class="fbm-obj-recent" id="fbm-obj-recent"></div></div><div class="fbm-obj-status" id="fbm-obj-status"></div></div>';
+    return '<div class="fbm-objects" id="fbm-objects" hidden><div class="fbm-header" id="fbm-obj-header"><div class="fbm-header-title">Objects Build <span class="fbm-badge">beta</span></div><button type="button" class="fbm-icon-btn" id="fbm-obj-close" title="Close">\xD7</button></div><div class="fbm-obj-actionbar"><input type="search" id="fbm-obj-search" class="fbm-obj-search" placeholder="Search\u2026" autocomplete="off" /><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-pipet" title="Pipet">' + ICONS.pipet + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-eraser" title="Eraser">' + ICONS.eraser + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-settings-tool" title="Object settings (FBM)">' + ICONS.gear + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-fog" title="Fog">' + ICONS.fog + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-undo" title="Undo">' + ICONS.undo + '</button><span class="fbm-obj-action-sep"></span><button type="button" class="fbm-icon-btn fbm-obj-tool" id="fbm-obj-single" title="Single place">' + ICONS.single + '</button><button type="button" class="fbm-icon-btn fbm-obj-tool fbm-obj-clear" id="fbm-obj-clear" title="Clear drawing selection (Esc)">' + ICONS.clear + '</button><span class="fbm-obj-action-sep"></span><button type="button" class="fbm-icon-btn" id="fbm-obj-save-cat" title="Export catalog JSON">' + ICONS.save + '</button><button type="button" class="fbm-icon-btn" id="fbm-obj-load-cat" title="Import catalog JSON">' + ICONS.load + '</button><input type="file" id="fbm-obj-load-file" accept="application/json,.json" hidden /><label class="fbm-obj-icon-size" title="Catalog icon size"><span>Icons</span><input type="range" id="fbm-obj-icon-size" min="48" max="96" step="8" value="96" /><span id="fbm-obj-icon-size-val">96</span></label></div><div class="fbm-obj-body" id="fbm-obj-body"><aside class="fbm-obj-tree" id="fbm-obj-tree"></aside><section class="fbm-obj-grid-wrap"><div class="fbm-obj-grid-head"><span id="fbm-obj-grid-title">Select a category</span><span class="fbm-muted fbm-hint" id="fbm-obj-brush-label"></span></div><div class="fbm-obj-grid" id="fbm-obj-grid"></div></section><div class="fbm-obj-splitter" id="fbm-obj-splitter" title="Resize detail"></div><aside class="fbm-obj-ext" id="fbm-obj-ext"><p class="fbm-muted fbm-hint" id="fbm-obj-ext-empty">Select an item to see variants.</p><div id="fbm-obj-ext-body" hidden><div class="fbm-obj-preview"><div class="fbm-obj-preview-swatch" id="fbm-obj-preview-swatch"></div><div class="fbm-obj-preview-text"><div class="fbm-obj-preview-name" id="fbm-obj-preview-name"></div><div class="fbm-muted fbm-hint" id="fbm-obj-preview-meta"></div></div></div><div class="fbm-section-head">Variants</div><div class="fbm-obj-variants" id="fbm-obj-variants"></div><div class="fbm-row" id="fbm-obj-custom-actions" hidden><button type="button" class="fbm-btn" id="fbm-obj-edit-variant" title="Rename this custom variant">Rename</button><button type="button" class="fbm-btn fbm-btn-danger" id="fbm-obj-del-variant">Delete</button></div></div></aside></div><div class="fbm-obj-recent-wrap"><div class="fbm-obj-recent-label">Recent</div><div class="fbm-obj-recent" id="fbm-obj-recent"></div></div><div class="fbm-obj-status" id="fbm-obj-status"></div></div>';
   };
   function isSectionCollapsed(secId) {
     if (!FBM.objectsState) FBM.loadObjectsState();
@@ -6263,6 +6373,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       const body = $4("fbm-obj-body");
       if (body && ui.extWidth) body.style.setProperty("--fbm-obj-ext-w", ui.extWidth + "px");
     }
+    applyObjectsIconSize();
     FBM.bindObjectsBuildUi();
     FBM.refreshObjectsBuildUi();
     setStatus("Objects Build ready.");
@@ -6350,6 +6461,14 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       search.addEventListener("input", function() {
         FBM._objectsUi.search = search.value || "";
         FBM.refreshObjectsBuildUi();
+      });
+    }
+    const iconSize = document.getElementById("fbm-obj-icon-size");
+    if (iconSize && !iconSize._fbmBound) {
+      iconSize._fbmBound = true;
+      iconSize.addEventListener("input", function() {
+        applyObjectsIconSize(Number(iconSize.value));
+        FBM.saveObjectsState();
       });
     }
     const single = $4("fbm-obj-single");
@@ -7802,17 +7921,31 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     }
     return !!chatDiv;
   };
-  var AUTO_CLOSE_WARN = "Autoclose is on but Autoshow float chat is off \u2014 no chat will open when joining a room.";
+  var AUTO_CLOSE_WARN = "Autoclose is on but Autoshow float chat is off \u2014 no chat will open when joining a MAP room.";
   FBM.warnAutoCloseWithoutAutoshow = function() {
     const cfg = fcCfg();
     if (!cfg.autoCloseOnJoin || cfg.autoshow !== false) return;
     if (FBM.showToast) FBM.showToast(AUTO_CLOSE_WARN, 5e3);
     else if (FBM.setStatus) FBM.setStatus(AUTO_CLOSE_WARN);
   };
+  function isAlwaysMapRoom() {
+    if (typeof ChatRoomData === "undefined" || !ChatRoomData) return false;
+    const md = ChatRoomData.MapData;
+    return !!(md && md.Type === "Always");
+  }
+  function floatChatAllowedHere() {
+    if (!inChatRoom()) return false;
+    try {
+      if (typeof ChatRoomMapViewIsActive === "function" && ChatRoomMapViewIsActive()) return true;
+    } catch (e) {
+    }
+    return isAlwaysMapRoom();
+  }
   FBM.maybeAutoCloseChatOnJoin = function() {
     const cfg = fcCfg();
     if (!cfg.autoCloseOnJoin) return;
     if (!inChatRoom()) return;
+    if (!isAlwaysMapRoom()) return;
     FBM.collapseClubChat();
     FBM.warnAutoCloseWithoutAutoshow();
     if (FBM.refreshFloatChatVisibility) FBM.refreshFloatChatVisibility();
@@ -7977,6 +8110,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
   FBM.openFloatChat = function(opts) {
     const cfg = fcCfg();
     if (cfg.enabled === false) return;
+    if (inChatRoom() && !floatChatAllowedHere()) return;
     FBM.ensureUi();
     const root = $6("fbm-float-chat");
     if (!root) return;
@@ -8033,6 +8167,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
   };
   FBM.resumeFloatChatAfterScreen = function() {
     if (!FBM._floatChatSuspended) return;
+    if (!floatChatAllowedHere()) return;
     FBM._floatChatSuspended = false;
     const cfg = fcCfg();
     if (cfg.enabled === false) return;
@@ -8089,6 +8224,10 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     }
     if (FBM._overlaysSuspendedForDialog) {
       FBM.resumeOverlaysAfterCharacterDialog();
+    }
+    if (!floatChatAllowedHere()) {
+      if (FBM.floatChatIsOpen()) FBM.suspendFloatChatForScreen();
+      return;
     }
     if (FBM._floatChatSuspended) {
       FBM.resumeFloatChatAfterScreen();
@@ -8262,7 +8401,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       body = htmlElementToMultilineText(clone);
     }
     if ((type === "chat" || type === "whisper") && nameBtn) {
-      body = body.replace(/^:\s*/, "");
+      body = body.replace(/^:\s+/, "");
     }
     if (type === "action") {
       body = body.replace(/^\(+|\)+$/g, "").trim() || body;
@@ -10058,7 +10197,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     }
     FBM.applyFloatChatTheme();
     const cfg = fcCfg();
-    if (cfg.enabled !== false && !cfg.hidden && inChatRoom()) {
+    if (cfg.enabled !== false && !cfg.hidden && inChatRoom() && floatChatAllowedHere()) {
       FBM.openFloatChat();
     }
   };
@@ -10308,7 +10447,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       autoclose.addEventListener("change", function() {
         fcCfg().autoCloseOnJoin = !!autoclose.checked;
         saveCfg();
-        FBM.setStatus("Autoclose chat on join " + (autoclose.checked ? "on." : "off."));
+        FBM.setStatus("Autoclose chat on MAP join " + (autoclose.checked ? "on." : "off."));
         if (autoclose.checked && fcCfg().autoshow === false) FBM.warnAutoCloseWithoutAutoshow();
       });
     }
@@ -11438,6 +11577,27 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
   function changelogId() {
     return String(FBM.CHANGELOG_ID || "r134-major");
   }
+  function sessionCloseKey() {
+    return "FBM_cl_closed_" + changelogId();
+  }
+  function isSessionClosed() {
+    if (FBM._changelogSessionClosed) return true;
+    try {
+      if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(sessionCloseKey()) === "1") {
+        FBM._changelogSessionClosed = true;
+        return true;
+      }
+    } catch (e) {
+    }
+    return false;
+  }
+  function markSessionClosed() {
+    FBM._changelogSessionClosed = true;
+    try {
+      if (typeof sessionStorage !== "undefined") sessionStorage.setItem(sessionCloseKey(), "1");
+    } catch (e) {
+    }
+  }
   function isDismissed() {
     if (!FBM.settings) FBM.loadSettings();
     return !!(FBM.settings && FBM.settings.dismissedChangelogId === changelogId());
@@ -11446,7 +11606,11 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     const items = [
       {
         title: "Objects Build",
-        body: "Floating catalog for tiles, objects, and effects \u2014 search, brush/pipet/eraser, fog, undo, and custom variants without relying on Club\u2019s map toolbar."
+        body: "Floating catalog for tiles, objects, and effects \u2014 search, brush/pipet/eraser, fog, undo, custom variants, and an Icons slider to shrink thumbs and see more items."
+      },
+      {
+        title: "Placement ghost",
+        body: "While building, a translucent preview follows the cursor only on valid tiles (doors on walls, etc.). Optional under General \u2014 on by default."
       },
       {
         title: "Object Settings",
@@ -11498,7 +11662,7 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
       modal.hidden = true;
     };
     const showBanner = function() {
-      if (FBM._changelogSessionClosed || isDismissed()) {
+      if (isSessionClosed() || isDismissed()) {
         banner.hidden = true;
         return;
       }
@@ -11509,14 +11673,14 @@ body.fbm-eyedrop-cursor, body.fbm-eyedrop-cursor * { cursor: crosshair !importan
     });
     const closeOnly = function() {
       hideModal();
-      FBM._changelogSessionClosed = true;
+      markSessionClosed();
       banner.hidden = true;
     };
     const dismissForever = function() {
       if (!FBM.settings) FBM.loadSettings();
       FBM.settings.dismissedChangelogId = changelogId();
       FBM.saveSettings();
-      FBM._changelogSessionClosed = true;
+      markSessionClosed();
       hideModal();
       banner.hidden = true;
       if (FBM.setStatus) FBM.setStatus("Update notice dismissed.");

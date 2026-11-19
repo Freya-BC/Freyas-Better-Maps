@@ -1,7 +1,7 @@
 /** Freyas Better Maps — defaults.js */
 import { FBM } from "./fbm";
 
-FBM.VERSION = "1.0.10";
+FBM.VERSION = "1.0.20";
 FBM.FULL_NAME = "Freyas Better Maps";
 FBM.EXTENSION_KEY = "FreyasBetterMaps";
 /** Named maps live in their own synced key so settings changes never re-upload them. */
@@ -13,10 +13,12 @@ FBM.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Better-Maps/loader.js";
 /** Player docs on GitHub Pages (changelog modal + About). */
 FBM.DOCS_URL = "https://freya-bc.github.io/Freyas-Better-Maps/";
 /**
- * Bump this when shipping a new “what’s new” notice. Users who dismissed an older
- * id will see the banner again for the new id.
+ * Id of the current “what’s new” notice. Independent of FBM.VERSION — patch/dev
+ * bumps must NOT change this, or “Don’t show again” resets for everyone.
+ * Only bump when intentionally re-enabling the banner for a major / campaign notice
+ * (and update `ui/changelog.ts` featureListHtml).
  */
-FBM.CHANGELOG_ID = "r134-major";
+FBM.CHANGELOG_ID = "obj-icons-ghost";
 
 FBM.LZ_PREFIX = "FBMLz1:";
 FBM.LZ_FORMAT = "FBMLz";
@@ -53,6 +55,8 @@ FBM.DEFAULT_SETTINGS = {
 	gridOn: false,
 	showInvisibleWalls: false,
 	copyObjectSettings: true,
+	/** Objects Build hover ghost while brush is armed (valid cells only). */
+	placementGhost: true,
 	buildBarHotkey: "Alt+B",
 	ui: {
 		left: null,

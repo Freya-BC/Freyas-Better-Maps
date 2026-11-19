@@ -45,6 +45,7 @@ declare const ChatRoomData:
 			Name?: string;
 			Limit?: number;
 			MemberLimit?: number;
+			MapData?: { Type?: string } | null;
 	  }
 	| undefined;
 declare const Player: {
@@ -630,7 +631,7 @@ FBM.collapseClubChat = function () {
 };
 
 const AUTO_CLOSE_WARN =
-	"Autoclose is on but Autoshow float chat is off — no chat will open when joining a room.";
+	"Autoclose is on but Autoshow float chat is off — no chat will open when joining a MAP room.";
 
 FBM.warnAutoCloseWithoutAutoshow = function () {
 	const cfg = fcCfg();
@@ -639,11 +640,35 @@ FBM.warnAutoCloseWithoutAutoshow = function () {
 	else if (FBM.setStatus) FBM.setStatus(AUTO_CLOSE_WARN);
 };
 
-/** After joining a room: optionally collapse Club chat (+ toast if float won't autoshow). */
+/** True only for Club map Type "Always" — not Hybrid or Never (normal). */
+function isAlwaysMapRoom(): boolean {
+	if (typeof ChatRoomData === "undefined" || !ChatRoomData) return false;
+	const md = ChatRoomData.MapData;
+	return !!(md && md.Type === "Always");
+}
+
+/**
+ * Float chat is for the map canvas — hide on normal (Never) rooms and Hybrid
+ * character lineup. Always-map + active map view keep it.
+ */
+function floatChatAllowedHere(): boolean {
+	if (!inChatRoom()) return false;
+	try {
+		if (typeof ChatRoomMapViewIsActive === "function" && ChatRoomMapViewIsActive()) return true;
+	} catch (e) {
+		/* ignore */
+	}
+	/* Load race: Always rooms are map-only even if the view flag is briefly false. */
+	return isAlwaysMapRoom();
+}
+
+/** After joining a MAP room: optionally collapse Club chat (+ toast if float won't autoshow). */
 FBM.maybeAutoCloseChatOnJoin = function () {
 	const cfg = fcCfg();
 	if (!cfg.autoCloseOnJoin) return;
 	if (!inChatRoom()) return;
+	/* Hybrid/normal rooms keep Club chat; collapse is MAP (Always) only. */
+	if (!isAlwaysMapRoom()) return;
 	FBM.collapseClubChat();
 	FBM.warnAutoCloseWithoutAutoshow();
 	if (FBM.refreshFloatChatVisibility) FBM.refreshFloatChatVisibility();
@@ -887,6 +912,8 @@ FBM.refreshFloatChatRoomTitle = function () {
 FBM.openFloatChat = function (opts?: { auto?: boolean }) {
 	const cfg = fcCfg();
 	if (cfg.enabled === false) return;
+	/* Do not open over normal / Hybrid lineup chat. */
+	if (inChatRoom() && !floatChatAllowedHere()) return;
 	FBM.ensureUi();
 	const root = $("fbm-float-chat");
 	if (!root) return;
@@ -950,6 +977,8 @@ FBM.suspendFloatChatForScreen = function () {
 
 FBM.resumeFloatChatAfterScreen = function () {
 	if (!FBM._floatChatSuspended) return;
+	/* Stay suspended on normal / Hybrid lineup until map view is active. */
+	if (!floatChatAllowedHere()) return;
 	FBM._floatChatSuspended = false;
 	const cfg = fcCfg();
 	if (cfg.enabled === false) return;
@@ -1019,6 +1048,11 @@ FBM.refreshFloatChatVisibility = function () {
 	}
 	if (FBM._overlaysSuspendedForDialog) {
 		FBM.resumeOverlaysAfterCharacterDialog();
+	}
+	/* Normal / Hybrid lineup: hide without clearing “was open” (resume on map). */
+	if (!floatChatAllowedHere()) {
+		if (FBM.floatChatIsOpen()) FBM.suspendFloatChatForScreen();
+		return;
 	}
 	if (FBM._floatChatSuspended) {
 		FBM.resumeFloatChatAfterScreen();
@@ -1261,9 +1295,10 @@ function classifyClubDiv(div: HTMLElement): FcMsg | null {
 			});
 		body = htmlElementToMultilineText(clone);
 	}
-	/* Club/WCE leave a literal ": " text node outside .chat-room-message-content. */
+	/* Club/WCE leave a literal ": " text node outside .chat-room-message-content.
+	 * Require whitespace after ":" so smileys like ":3" / ":)" are not eaten. */
 	if ((type === "chat" || type === "whisper") && nameBtn) {
-		body = body.replace(/^:\s*/, "");
+		body = body.replace(/^:\s+/, "");
 	}
 	/* Action OOC wrappers only — emotes already include * from Club; do not strip/re-add. */
 	if (type === "action") {
@@ -3425,7 +3460,7 @@ FBM.bindFloatChatUi = function () {
 
 	FBM.applyFloatChatTheme();
 	const cfg = fcCfg();
-	if (cfg.enabled !== false && !cfg.hidden && inChatRoom()) {
+	if (cfg.enabled !== false && !cfg.hidden && inChatRoom() && floatChatAllowedHere()) {
 		FBM.openFloatChat();
 	}
 };
@@ -3702,7 +3737,7 @@ FBM.bindFloatChatSettingsControls = function () {
 		autoclose.addEventListener("change", function () {
 			fcCfg().autoCloseOnJoin = !!autoclose.checked;
 			saveCfg();
-			FBM.setStatus("Autoclose chat on join " + (autoclose.checked ? "on." : "off."));
+			FBM.setStatus("Autoclose chat on MAP join " + (autoclose.checked ? "on." : "off."));
 			if (autoclose.checked && fcCfg().autoshow === false) FBM.warnAutoCloseWithoutAutoshow();
 		});
 	}

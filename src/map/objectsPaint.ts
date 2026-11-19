@@ -373,6 +373,88 @@ function wrapPaintFn(fn: Function, label: string) {
 	return wrapped;
 }
 
+/**
+ * Translucent hover ghost for the armed Objects Build brush.
+ * Draws only when General → placementGhost is on and Club canSet* allows the cell.
+ */
+FBM.objectsDrawPlacementGhost = function (Left: number, Top: number, Width: number, Height: number) {
+	if (!FBM.settings || FBM.settings.placementGhost === false) return;
+	const paint = FBM._objectsPaint;
+	if (!paint || !paint.armed || paint.pipet || paint.clubId == null) return;
+	if (FBM._copy && FBM._copy.mode) return;
+	if (FBM.mapIsAdmin && !FBM.mapIsAdmin()) return;
+	if (!FBM.mapTileFromMouse || !FBM.mapScreenFromTile || !FBM.drawMapCellGhost) return;
+
+	const hover = FBM.mapTileFromMouse(MouseX, MouseY, Left, Top, Width, Height);
+	if (!hover) return;
+
+	const doodad = resolveDoodad(paint.kind, paint.clubId);
+	if (!doodad) return;
+
+	const map = mapApi();
+	const mw = typeof ChatRoomMapViewWidth === "number" ? ChatRoomMapViewWidth : 40;
+	const mh = typeof ChatRoomMapViewHeight === "number" ? ChatRoomMapViewHeight : 40;
+	if (hover.X < 0 || hover.Y < 0 || hover.X >= mw || hover.Y >= mh) return;
+
+	let ok = true;
+	try {
+		if (paint.kind === "tile") {
+			ok = map && typeof map.canSetTile === "function" ? !!map.canSetTile(hover.X, hover.Y, doodad) : true;
+		} else if (paint.kind === "object") {
+			ok = map && typeof map.canSetObject === "function" ? !!map.canSetObject(hover.X, hover.Y, doodad) : true;
+		} else if (paint.kind === "effect") {
+			ok = true;
+		} else {
+			return;
+		}
+	} catch (e) {
+		return;
+	}
+	if (!ok) return;
+
+	const s = FBM.mapScreenFromTile(hover.X, hover.Y, Left, Top, Width, Height);
+	if (s.Left + s.TileWidth < Left || s.Top + s.TileHeight < Top) return;
+	if (s.Left > Left + Width || s.Top > Top + Height) return;
+
+	const ch = String.fromCharCode(paint.clubId);
+	let tileCh: string | null = null;
+	let objectCh: string | null = null;
+	let settings: any = null;
+	let useSettings = false;
+	if (paint.kind === "tile") {
+		tileCh = ch;
+	} else if (paint.kind === "object") {
+		objectCh = ch;
+		const st = paint.settings;
+		if (st) {
+			settings = {
+				Rotation: st.rotation != null ? st.rotation : 0,
+				Size: st.size != null ? st.size : 100,
+				Colors: Array.isArray(st.colors) ? st.colors : [],
+			};
+			useSettings = true;
+		}
+	} else {
+		/* Effects: no asset ghost in drawMapCellGhost — soft fill like paste fallback. */
+		if (typeof DrawRect === "function") {
+			DrawRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "rgba(91,192,222,0.28)");
+		}
+		if (typeof DrawEmptyRect === "function") {
+			DrawEmptyRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "#5bc0de", 2);
+		}
+		return;
+	}
+
+	const r = FBM.drawMapCellGhost(null, tileCh, objectCh, settings, s, {
+		alpha: 0.4,
+		useSettings: useSettings,
+	});
+	const drew = !!(r && (r.drewTile || r.drewObject));
+	if (!drew && typeof DrawRect === "function") {
+		DrawRect(s.Left, s.Top, s.TileWidth, s.TileHeight, "rgba(91,192,222,0.28)");
+	}
+};
+
 FBM.installObjectsPaintHook = function () {
 	/* Club Brush tool (newer builds) */
 	if (typeof ChatRoomMapViewTools !== "undefined" && ChatRoomMapViewTools && ChatRoomMapViewTools.Brush) {

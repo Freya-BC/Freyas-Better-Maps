@@ -26,6 +26,7 @@ Tabs: **General** | **Chat** | **Map storage** | **About**.
 | Allow building tools | On | Show FBM map button / allow build bar |
 | Show invisible walls | Off | Red X on EmptySpace Impassable |
 | Object settings on copy & paste | On | Include Sign/Tether/rotation/size/color |
+| Show placement ghost while building | On | Translucent preview under cursor when Objects Build brush is armed; only on tiles Club allows |
 | Full blindfold | Off | Grey walls / short range when fully blind |
 | Others look like | Greyscale models | Greyscale or generic silhouette |
 | Whisper at hearing range | Off | Whisper when hearable + in range |
@@ -50,7 +51,7 @@ Details: [MAP_VIEW.md](MAP_VIEW.md), [BUILD_BAR.md](BUILD_BAR.md).
 |--------|---------|---------|
 | Enable Floatable Chat | On | Master switch |
 | Autoshow when Club chat hidden | On | Pop panel when Club chat collapses |
-| Autoclose chat joining a room | Off | Collapse Club chat on join |
+| Autoclose chat joining a MAP room | Off | Collapse Club chat on join (Always-map only) |
 | Hotkey | Alt+C | Capture or type |
 | Text size | 13 | 11–18 |
 | Transparency | 15% | 0–60 glass |

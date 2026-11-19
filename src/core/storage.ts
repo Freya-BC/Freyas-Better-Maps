@@ -36,6 +36,7 @@ FBM.normalizeSettings = function (raw: unknown): FBMSettings {
 	out.gridOn = !!s.gridOn;
 	out.showInvisibleWalls = !!s.showInvisibleWalls;
 	out.copyObjectSettings = s.copyObjectSettings !== false;
+	out.placementGhost = s.placementGhost !== false;
 	out.buildBarHotkey =
 		typeof s.buildBarHotkey === "string" && s.buildBarHotkey.trim()
 			? s.buildBarHotkey.trim()

@@ -13,6 +13,33 @@ function changelogId(): string {
 	return String(FBM.CHANGELOG_ID || "r134-major");
 }
 
+function sessionCloseKey(): string {
+	return "FBM_cl_closed_" + changelogId();
+}
+
+function isSessionClosed(): boolean {
+	if (FBM._changelogSessionClosed) return true;
+	try {
+		if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(sessionCloseKey()) === "1") {
+			FBM._changelogSessionClosed = true;
+			return true;
+		}
+	} catch (e) {
+		/* ignore */
+	}
+	return false;
+}
+
+function markSessionClosed(): void {
+	FBM._changelogSessionClosed = true;
+	try {
+		if (typeof sessionStorage !== "undefined") sessionStorage.setItem(sessionCloseKey(), "1");
+	} catch (e) {
+		/* ignore */
+	}
+}
+
+/** True when this notice was dismissed via “Don’t show again” (survives VERSION bumps). */
 function isDismissed(): boolean {
 	if (!FBM.settings) FBM.loadSettings();
 	return !!(FBM.settings && FBM.settings.dismissedChangelogId === changelogId());
@@ -22,7 +49,11 @@ function featureListHtml(): string {
 	const items = [
 		{
 			title: "Objects Build",
-			body: "Floating catalog for tiles, objects, and effects — search, brush/pipet/eraser, fog, undo, and custom variants without relying on Club’s map toolbar.",
+			body: "Floating catalog for tiles, objects, and effects — search, brush/pipet/eraser, fog, undo, custom variants, and an Icons slider to shrink thumbs and see more items.",
+		},
+		{
+			title: "Placement ghost",
+			body: "While building, a translucent preview follows the cursor only on valid tiles (doors on walls, etc.). Optional under General — on by default.",
 		},
 		{
 			title: "Object Settings",
@@ -110,7 +141,7 @@ FBM.bindChangelogUi = function () {
 		modal.hidden = true;
 	};
 	const showBanner = function () {
-		if (FBM._changelogSessionClosed || isDismissed()) {
+		if (isSessionClosed() || isDismissed()) {
 			banner.hidden = true;
 			return;
 		}
@@ -122,14 +153,15 @@ FBM.bindChangelogUi = function () {
 	});
 	const closeOnly = function () {
 		hideModal();
-		FBM._changelogSessionClosed = true;
+		markSessionClosed();
 		banner.hidden = true;
 	};
 	const dismissForever = function () {
 		if (!FBM.settings) FBM.loadSettings();
+		/* Persist against CHANGELOG_ID only — patch VERSION bumps must not re-show. */
 		FBM.settings.dismissedChangelogId = changelogId();
 		FBM.saveSettings();
-		FBM._changelogSessionClosed = true;
+		markSessionClosed();
 		hideModal();
 		banner.hidden = true;
 		if (FBM.setStatus) FBM.setStatus("Update notice dismissed.");

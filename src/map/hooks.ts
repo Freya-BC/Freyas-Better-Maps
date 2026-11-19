@@ -272,7 +272,9 @@ FBM.mapDrawInvisibleWalls = function (Left, Top, Width, Height) {
 
 FBM.mapDrawGridOverlay = function (Left, Top, Width, Height) {
 	const m = FBM.mapBag();
+	/* Build-bar tool — only while room admin (same gate as the bar itself). */
 	if (!m.buildingTools || !m.gridOn) return;
+	if (!FBM.mapIsAdmin || !FBM.mapIsAdmin()) return;
 	if (!Player || !Player.MapData || !Player.MapData.Pos) return;
 	if (typeof DrawEmptyRect !== "function" && typeof DrawRect !== "function") return;
 	const layout = FBM.mapTileLayout(Left, Top, Width, Height);
@@ -915,6 +917,9 @@ FBM.installMap = function () {
 		});
 		run("copyHighlight", function () {
 			if (FBM.copyDrawHighlight) FBM.copyDrawHighlight(Left, Top, Width, Height);
+		});
+		run("placementGhost", function () {
+			if (FBM.objectsDrawPlacementGhost) FBM.objectsDrawPlacementGhost(Left, Top, Width, Height);
 		});
 		run("typing", function () {
 			if (FBM.mapDrawTypingIndicators) FBM.mapDrawTypingIndicators(Left, Top, Width, Height);

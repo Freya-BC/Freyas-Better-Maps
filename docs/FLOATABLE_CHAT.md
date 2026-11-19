@@ -21,7 +21,7 @@ Use Floatable Chat whenever you hide Club’s default chat on the map and still 
 
 1. Settings → **Chat** → enable Floatable Chat.
 2. **Autoshow when default Club chat is hidden** pops the panel when Club chat collapses.
-3. **Autoclose chat joining a room** collapses Club chat on join (toast warns if Autoshow is off).
+3. **Autoclose chat joining a MAP room** collapses Club chat on join in Always-map rooms only — not Hybrid or normal (toast warns if Autoshow is off).
 4. Hotkey default **Alt+C** (Capture under Chat).
 5. Slash: **`/chat`**.
 

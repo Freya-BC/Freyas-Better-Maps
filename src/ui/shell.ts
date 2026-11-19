@@ -183,6 +183,7 @@ FBM.ensureUi = function () {
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-building" /> <span>Allow building tools (FBM button on map bar)</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-invisible-walls" /> <span>Show invisible walls (EmptySpace Impassable red X)</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-copy-objset" /> <span>Object settings on copy &amp; paste (Sign, Tether, Rotation, Size, Color)</span></label>' +
+		'<label class="fbm-check-row"><input type="checkbox" id="fbm-placement-ghost" /> <span>Show placement ghost while building (only on valid tiles)</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-blindfold" /> <span>Full blindfold (grey walls; hide your tile)</span></label>' +
 		'<div class="fbm-row fbm-indent" id="fbm-blindfold-style-row">' +
 		'<label class="fbm-muted" for="fbm-blindfold-style">Others look like</label>' +
@@ -206,7 +207,7 @@ FBM.ensureUi = function () {
 		'<p class="fbm-muted fbm-hint">Floatable Chat for when Club chat is collapsed on the map. Preferences are synced via ExtensionSettings; position and size stay on this device.</p>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-fc-enabled" /> <span>Enable Floatable Chat</span></label>' +
 		'<label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoshow" /> <span>Autoshow when default Club chat is hidden</span></label>' +
-		'<label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoclose" /> <span>Autoclose chat joining a room</span></label>' +
+		'<label class="fbm-check-row"><input type="checkbox" id="fbm-fc-autoclose" /> <span>Autoclose chat joining a MAP room</span></label>' +
 		'<div class="fbm-section"><div class="fbm-section-head">Hotkey</div>' +
 		'<div class="fbm-row"><input type="text" id="fbm-fc-hotkey" placeholder="Alt+C" maxlength="32" />' +
 		'<button type="button" class="fbm-btn" id="fbm-fc-hotkey-capture">Capture</button></div></div>' +
@@ -407,7 +408,7 @@ FBM.ensureUi = function () {
 			[
 				"Open Settings → <strong>Chat</strong> (or hotkey, default <strong>Alt+C</strong>).",
 				"Enable <strong>Autoshow when default Club chat is hidden</strong> to pop the panel when the map chat is collapsed.",
-				"<strong>Autoclose chat joining a room</strong> collapses Club chat on join (toast warns if Autoshow is off).",
+				"<strong>Autoclose chat joining a MAP room</strong> collapses Club chat on join in Always-map rooms only — not Hybrid or normal (toast warns if Autoshow is off).",
 				"Type <code>/</code> for Club command tags. Send copies into Club’s InputChat so emotes, whispers, and registered commands still work.",
 				"Whispers/beeps show <strong>from/to</strong> labels. Hover <strong>↩</strong> to reply (including your own messages). Cancel with the red ×.",
 				"Click a name to copy the ID and prep <code>/whisper id</code>. Compose border turns purple for whisper and teal for beep.",

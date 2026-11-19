@@ -17,8 +17,19 @@ FBM.DEFAULT_OBJECTS_STATE = {
 		width: 900,
 		height: 560,
 		extWidth: 260,
+		/** Catalog / variants grid cell min size (px). 48–96. */
+		iconSize: 96,
 		collapsedSections: {} as Record<string, boolean>,
 	},
+};
+
+/** Clamp Objects Build catalog icon size to 48–96 (step 8). */
+FBM.clampObjectsIconSize = function (n: unknown): number {
+	let v = Math.round(Number(n));
+	if (!isFinite(v)) v = 96;
+	if (v < 48) v = 48;
+	if (v > 96) v = 96;
+	return Math.round(v / 8) * 8;
 };
 
 FBM.loadObjectsState = function () {
@@ -30,12 +41,14 @@ FBM.loadObjectsState = function () {
 	}
 	const d = FBM.DEFAULT_OBJECTS_STATE;
 	const s = data && typeof data === "object" ? data : {};
+	const ui = Object.assign({}, d.ui, s.ui && typeof s.ui === "object" ? s.ui : {}) as typeof d.ui;
+	ui.iconSize = FBM.clampObjectsIconSize(ui.iconSize != null ? ui.iconSize : d.ui.iconSize);
 	FBM.objectsState = {
 		categoryOrder: s.categoryOrder && typeof s.categoryOrder === "object" ? s.categoryOrder : {},
 		customVariants: s.customVariants && typeof s.customVariants === "object" ? s.customVariants : {},
 		recent: Array.isArray(s.recent) ? s.recent.slice(0, 20) : [],
 		singlePlace: !!s.singlePlace,
-		ui: Object.assign({}, d.ui, s.ui && typeof s.ui === "object" ? s.ui : {}),
+		ui: ui,
 	};
 	return FBM.objectsState;
 };

@@ -19,6 +19,8 @@ export interface FBMSettings {
 	gridOn: boolean;
 	showInvisibleWalls: boolean;
 	copyObjectSettings: boolean;
+	/** Objects Build placement hover ghost (valid cells only). Default on. */
+	placementGhost: boolean;
 	buildBarHotkey: string;
 	ui: {
 		left: number | null;
@@ -29,7 +31,7 @@ export interface FBMSettings {
 	floatChat: {
 		enabled: boolean;
 		autoshow: boolean;
-		/** Collapse Club chat when joining a room (uses SetSplitPosition / hide). */
+		/** Collapse Club chat when joining a MAP (Always) room — not Hybrid/Never. */
 		autoCloseOnJoin: boolean;
 		hotkey: string;
 		hidden: boolean;
@@ -68,7 +70,7 @@ export interface FBMSettings {
 	};
 	maps: unknown[];
 	autosave: unknown;
-	/** Changelog id dismissed via “Don’t show again”. */
+	/** Changelog id dismissed via “Don’t show again” (matches FBM.CHANGELOG_ID, not VERSION). */
 	dismissedChangelogId: string;
 	[key: string]: unknown;
 }
